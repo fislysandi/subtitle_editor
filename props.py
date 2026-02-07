@@ -351,9 +351,8 @@ class SubtitleEditorProperties(PropertyGroup):
         name="PyTorch Version",
         description="PyTorch backend for your GPU (platform-specific)",
         items=[
-            # Universal / Auto
-            ("auto", "Auto-detect", "Automatically detect and install best version"),
-            ("cpu", "CPU Only", "No GPU - CPU computation only"),
+            # CPU (Universal fallback)
+            ("cpu", "CPU Only", "No GPU - CPU computation only (works on all systems)"),
             # NVIDIA GPUs (All platforms)
             ("cu118", "CUDA 11.8 — NVIDIA", "NVIDIA GPUs (older GTX/RTX series)"),
             ("cu121", "CUDA 12.1 — NVIDIA", "NVIDIA RTX 20/30/40 series (recommended)"),
@@ -363,7 +362,7 @@ class SubtitleEditorProperties(PropertyGroup):
             # Apple / Intel
             ("mps", "Metal (MPS) — Apple Silicon", "Apple M1/M2/M3 Macs"),
         ],
-        default="auto",
+        default="cpu",
     )
 
     gpu_detected: BoolProperty(

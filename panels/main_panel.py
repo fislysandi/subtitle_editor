@@ -126,6 +126,10 @@ class SEQUENCER_PT_whisper_panel(Panel):
         if props.is_installing_deps:
             row = box.row()
             row.prop(props, "deps_install_status", text="Status", emboss=False)
+        elif not props.deps_faster_whisper or not props.deps_pysubs2:
+            # Show message that PyTorch needs separate install
+            row = box.row()
+            row.label(text="Install base deps first, then PyTorch below", icon="INFO")
 
         # PyTorch Section
         box = col.box()
@@ -141,15 +145,24 @@ class SEQUENCER_PT_whisper_panel(Panel):
             row = box.row()
             row.label(text="✓ GPU detected", icon="CHECKMARK")
 
+        # PyTorch Version selection (required)
+        row = box.row()
+        row.label(text="Select your GPU backend:", icon="GPU")
+
         # PyTorch Version dropdown and Install button
         row = box.row(align=True)
-        row.prop(props, "pytorch_version", text="")
+        row.prop(props, "pytorch_version", text="Backend")
         row.operator("subtitle.install_pytorch", text="Install PyTorch")
 
         # Show PyTorch install status if installing
         if props.is_installing_pytorch:
             row = box.row()
             row.prop(props, "pytorch_install_status", text="Status", emboss=False)
+        elif not props.deps_torch:
+            # Remind user to install PyTorch
+            row = box.row()
+            row.alert = True
+            row.label(text="⚠ Select backend and click Install PyTorch", icon="ERROR")
 
         # Model dropdown
         box = col.box()

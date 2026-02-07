@@ -173,7 +173,7 @@ subtitle_editor/
 - `progress_text` - Status text
 - `current_text` - Currently editing text
 - **Dependencies:** `deps_faster_whisper`, `deps_torch`, `deps_pysubs2`, `deps_onnxruntime`, `is_installing_deps`, `deps_install_status`
-- **PyTorch Settings:** `pytorch_version` (auto/cpu/cu118/cu121/cu124/rocm57/mps), `gpu_detected`, `is_installing_pytorch`, `pytorch_install_status`
+- **PyTorch Settings:** `pytorch_version` (cpu/cu118/cu121/cu124/rocm57/mps), `gpu_detected`, `is_installing_pytorch`, `pytorch_install_status`
 
 ## 🐛 Known Issues / TODO
 
@@ -208,7 +208,9 @@ cat PROJECT_STATE.md
      * CUDA 11.8/12.1/12.4 for NVIDIA GPUs (all platforms)
      * ROCm 5.7 for AMD RX 7900 series (Linux only)
      * Metal (MPS) for Apple Silicon Macs
-   - Dedicated "Install PyTorch" button
+   - **Explicit selection required** - Removed "auto" option, users must select their backend
+   - Install Dependencies button now only installs base packages (faster-whisper, etc.)
+   - PyTorch must be installed separately via dedicated "Install PyTorch" button
    - Status messages during installation
    - New operators: `check_gpu`, `install_pytorch`
 
