@@ -1,6 +1,6 @@
 # Subtitle Editor - Project State
 
-**Last Updated:** 2025-02-07 (Commit: 0c4d3f2)  
+**Last Updated:** 2025-02-07 (Commit: Latest - PyTorch GPU Support)  
 **Addon Location:** `addons/subtitle_editor/`
 
 ## 📍 Current Status
@@ -136,6 +136,8 @@ subtitle_editor/
 - `subtitle.update_text` - Update subtitle text
 - `subtitle.check_dependencies` - Check if dependencies are installed
 - `subtitle.install_dependencies` - Install missing dependencies
+- `subtitle.check_gpu` - Check GPU availability for PyTorch
+- `subtitle.install_pytorch` - Install PyTorch with selected CUDA/ROCm version
 
 ### Panels
 - `SEQUENCER_PT_panel` - Main panel with UIList and integrated editing
@@ -171,6 +173,7 @@ subtitle_editor/
 - `progress_text` - Status text
 - `current_text` - Currently editing text
 - **Dependencies:** `deps_faster_whisper`, `deps_torch`, `deps_pysubs2`, `deps_onnxruntime`, `is_installing_deps`, `deps_install_status`
+- **PyTorch Settings:** `pytorch_version` (auto/cpu/cu118/cu121/cu124/rocm57), `gpu_detected`, `is_installing_pytorch`, `pytorch_install_status`
 
 ## 🐛 Known Issues / TODO
 
@@ -181,7 +184,9 @@ subtitle_editor/
 - [ ] Test all import/export formats
 - [ ] Add file browser panels for import/export
 - [ ] Optimize transcription performance
-- [ ] Add PyTorch version selection in dependency installer
+- [x] Add PyTorch version selection in dependency installer
+- [ ] Implement word count splitting in transcription
+- [ ] Test PyTorch installation on different GPU types
 
 ## 🔄 To Resume Work
 
@@ -196,20 +201,29 @@ cat PROJECT_STATE.md
 
 ## 📝 Recent Changes
 
-1. **Major UI Redesign** - Complete overhaul of Transcription & Translation panel
+1. **PyTorch GPU Support** - New PyTorch installation section
+   - GPU detection with visual warning if not detected (CPU fallback)
+   - PyTorch version dropdown: Auto-detect, CPU, CUDA 11.8/12.1/12.4, ROCm 5.7
+   - Dedicated "Install PyTorch" button
+   - Status messages during installation
+   - New operators: `check_gpu`, `install_pytorch`
+
+2. **Major UI Redesign** - Complete overhaul of Transcription & Translation panel
    - Added Dependencies section with install/verify functionality
-   - Reorganized layout: Dependencies → Model → Device/Compute → Language → Settings → Actions
+   - Reorganized layout: Dependencies → PyTorch → Model → Device/Compute → Language → Settings → Actions
    - Added 19 Whisper models with clear multilingual/English grouping
    - New controls: Beam Size, Max Words per Strip, Channel, Font Size, V Align, Wrap Width
    - Integrated edit section into main panel (removed separate panel)
    - VAD Filter now displays as checkbox
 
-2. **New Operators**
+3. **New Operators**
    - `subtitle.translate` - Dedicated translation to English
    - `subtitle.check_dependencies` - Check dependency installation status
-   - `subtitle.install_dependencies` - Install missing dependencies (with future PyTorch version selection)
+   - `subtitle.install_dependencies` - Install missing dependencies
+   - `subtitle.check_gpu` - Check GPU availability
+   - `subtitle.install_pytorch` - Install PyTorch with CUDA/ROCm support
 
-3. **New Properties**
+4. **New Properties**
    - `compute_type` - Computation precision (int8, float16, float32)
    - `beam_size` - Beam search size (1-10)
    - `max_words_per_strip` - Word limit per subtitle strip (0-20)
@@ -217,9 +231,10 @@ cat PROJECT_STATE.md
    - `subtitle_font_size` - Font size control (8-200)
    - `v_align` - Vertical alignment (Top/Center/Bottom)
    - `wrap_width` - Text wrapping factor (0-1)
+   - PyTorch settings: `pytorch_version`, `gpu_detected`, `is_installing_pytorch`, `pytorch_install_status`
    - Dependency tracking: `deps_*` status properties
 
-4. **Previous**
+5. **Previous**
    - UI Update - Matched upstream tin2tin layout style
    - Framework Migration - Migrated to auto-load system
    - UV Integration - Dependency management via UV

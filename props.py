@@ -342,6 +342,39 @@ class SubtitleEditorProperties(PropertyGroup):
         default="",
     )
 
+    # PyTorch settings
+    pytorch_version: EnumProperty(
+        name="PyTorch Version",
+        description="PyTorch version to install (for GPU compatibility)",
+        items=[
+            ("auto", "Auto-detect", "Automatically choose best version"),
+            ("cpu", "CPU Only", "CPU-only (no GPU support)"),
+            ("cu118", "CUDA 11.8", "CUDA 11.8 (older GPUs)"),
+            ("cu121", "CUDA 12.1", "CUDA 12.1 (newer GPUs)"),
+            ("cu124", "CUDA 12.4", "CUDA 12.4 (latest GPUs)"),
+            ("rocm57", "ROCm 5.7", "ROCm 5.7 (AMD GPUs - Linux only)"),
+        ],
+        default="auto",
+    )
+
+    gpu_detected: BoolProperty(
+        name="GPU Detected",
+        description="Whether a compatible GPU was detected",
+        default=False,
+    )
+
+    is_installing_pytorch: BoolProperty(
+        name="Installing PyTorch",
+        description="PyTorch is being installed",
+        default=False,
+    )
+
+    pytorch_install_status: StringProperty(
+        name="PyTorch Install Status",
+        description="Current PyTorch installation status",
+        default="",
+    )
+
     # Text strip appearance
     font_size: IntProperty(
         name="Font Size",

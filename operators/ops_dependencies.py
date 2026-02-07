@@ -70,8 +70,25 @@ class SUBTITLE_OT_check_dependencies(Operator):
 
         all_installed = all(deps_status.values())
 
+        # Also check GPU status
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                props.gpu_detected = True
+            else:
+                props.gpu_detected = False
+        except:
+            props.gpu_detected = False
+
         if all_installed:
-            self.report({"INFO"}, "All dependencies are installed")
+            if props.gpu_detected:
+                self.report({"INFO"}, "All dependencies installed - GPU ready")
+            else:
+                self.report(
+                    {"WARNING"},
+                    "All dependencies installed - No GPU detected (CPU only)",
+                )
         else:
             missing = [k for k, v in deps_status.items() if not v]
             self.report({"WARNING"}, f"Missing dependencies: {', '.join(missing)}")
@@ -224,7 +241,117 @@ class SUBTITLE_OT_install_dependencies(Operator):
         return self.execute(context)
 
 
+class SUBTITLE_OT_check_gpu(Operator):
+    """Check if GPU is available for PyTorch"""
+
+    bl_idname = "subtitle.check_gpu"
+    bl_label = "Check GPU"
+    bl_description = "Check if a compatible GPU is available"
+    bl_options = {"REGISTER", "INTERNAL"}
+
+    def execute(self, context):
+        props = context.scene.subtitle_editor
+
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                props.gpu_detected = True
+                gpu_name = torch.cuda.get_device_name(0)
+                self.report({"INFO"}, f"GPU detected: {gpu_name}")
+            else:
+                props.gpu_detected = False
+                self.report({"WARNING"}, "No GPU detected - will fallback to CPU")
+        except ImportError:
+            props.gpu_detected = False
+            self.report({"WARNING"}, "PyTorch not installed - cannot check GPU")
+
+        return {"FINISHED"}
+
+
+class SUBTITLE_OT_install_pytorch(Operator):
+    """Install PyTorch with selected version"""
+
+    bl_idname = "subtitle.install_pytorch"
+    bl_label = "Install PyTorch"
+    bl_description = "Install PyTorch with the selected version for your GPU"
+    bl_options = {"REGISTER"}
+
+    def execute(self, context):
+        props = context.scene.subtitle_editor
+        props.is_installing_pytorch = True
+        props.pytorch_install_status = "Starting PyTorch installation..."
+
+        # Run installation in background
+        import threading
+
+        thread = threading.Thread(target=self._install_thread, args=(context,))
+        thread.daemon = True
+        thread.start()
+
+        return {"FINISHED"}
+
+    def _install_thread(self, context):
+        """Install PyTorch in background thread"""
+        props = context.scene.subtitle_editor
+        pytorch_version = props.pytorch_version
+
+        try:
+            # Get Python executable
+            python_exe = sys.executable
+
+            # Base PyTorch packages
+            packages = ["torch", "torchaudio"]
+
+            # Determine index URL based on selection
+            index_url = None
+            if pytorch_version == "cpu":
+                index_url = "https://download.pytorch.org/whl/cpu"
+            elif pytorch_version == "cu118":
+                index_url = "https://download.pytorch.org/whl/cu118"
+            elif pytorch_version == "cu121":
+                index_url = "https://download.pytorch.org/whl/cu121"
+            elif pytorch_version == "cu124":
+                index_url = "https://download.pytorch.org/whl/cu124"
+            elif pytorch_version == "rocm57":
+                index_url = "https://download.pytorch.org/whl/rocm5.7"
+            # For "auto", don't specify index_url - let pip choose
+
+            # Install PyTorch
+            props.pytorch_install_status = f"Installing PyTorch ({pytorch_version})..."
+
+            cmd = [python_exe, "-m", "pip", "install", "-q"] + packages
+            if index_url:
+                cmd.extend(["--index-url", index_url])
+
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+
+            if result.returncode != 0:
+                props.pytorch_install_status = f"Error: {result.stderr[:200]}"
+                props.is_installing_pytorch = False
+                return
+
+            props.pytorch_install_status = "PyTorch installed successfully!"
+
+            # Re-check dependencies to update torch status
+            bpy.app.timers.register(
+                lambda: bpy.ops.subtitle.check_dependencies(), first_interval=0.5
+            )
+
+            # Also check GPU status
+            bpy.app.timers.register(
+                lambda: bpy.ops.subtitle.check_gpu(), first_interval=1.0
+            )
+
+        except Exception as e:
+            props.pytorch_install_status = f"Error: {str(e)}"
+        finally:
+            props.is_installing_pytorch = False
+
+
 classes = [
     SUBTITLE_OT_check_dependencies,
     SUBTITLE_OT_install_dependencies,
+    SUBTITLE_OT_check_gpu,
+    SUBTITLE_OT_install_pytorch,
 ]

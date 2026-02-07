@@ -127,6 +127,30 @@ class SEQUENCER_PT_whisper_panel(Panel):
             row = box.row()
             row.prop(props, "deps_install_status", text="Status", emboss=False)
 
+        # PyTorch Section
+        box = col.box()
+
+        # Check GPU and show warning if not detected
+        if not props.gpu_detected and props.deps_torch:
+            row = box.row()
+            row.alert = True
+            row.label(text="⚠ No GPU detected - CPU fallback", icon="ERROR")
+            row = box.row()
+            row.label(text="  Install PyTorch with CUDA for GPU acceleration")
+        elif props.gpu_detected:
+            row = box.row()
+            row.label(text="✓ GPU detected", icon="CHECKMARK")
+
+        # PyTorch Version dropdown and Install button
+        row = box.row(align=True)
+        row.prop(props, "pytorch_version", text="")
+        row.operator("subtitle.install_pytorch", text="Install PyTorch")
+
+        # Show PyTorch install status if installing
+        if props.is_installing_pytorch:
+            row = box.row()
+            row.prop(props, "pytorch_install_status", text="Status", emboss=False)
+
         # Model dropdown
         box = col.box()
         box.prop(props, "model")
