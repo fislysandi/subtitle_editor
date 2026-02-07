@@ -168,14 +168,17 @@ class SEQUENCER_PT_whisper_panel(Panel):
         box = col.box()
         row = box.row(align=True)
         row.prop(props, "model", text="")
-        row.operator("subtitle.download_model", text="Download", icon="IMPORT")
+
+        # Download button (disabled while downloading)
+        if props.is_downloading_model:
+            row.label(text="Downloading...", icon="FILE_REFRESH")
+        else:
+            row.operator("subtitle.download_model", text="Download", icon="IMPORT")
 
         # Show download progress if downloading
         if props.is_downloading_model:
-            row = box.row()
-            row.prop(props, "model_download_status", text="", emboss=False)
-            row = box.row()
-            row.prop(
+            box.prop(props, "model_download_status", text="Status", emboss=False)
+            box.prop(
                 props, "model_download_progress", text="Download Progress", slider=True
             )
 
