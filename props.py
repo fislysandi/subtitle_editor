@@ -345,14 +345,19 @@ class SubtitleEditorProperties(PropertyGroup):
     # PyTorch settings
     pytorch_version: EnumProperty(
         name="PyTorch Version",
-        description="PyTorch version to install (for GPU compatibility)",
+        description="PyTorch backend for your GPU (platform-specific)",
         items=[
-            ("auto", "Auto-detect", "Automatically choose best version"),
-            ("cpu", "CPU Only", "CPU-only (no GPU support)"),
-            ("cu118", "CUDA 11.8", "CUDA 11.8 (older GPUs)"),
-            ("cu121", "CUDA 12.1", "CUDA 12.1 (newer GPUs)"),
-            ("cu124", "CUDA 12.4", "CUDA 12.4 (latest GPUs)"),
-            ("rocm57", "ROCm 5.7", "ROCm 5.7 (AMD GPUs - Linux only)"),
+            # Universal / Auto
+            ("auto", "Auto-detect", "Automatically detect and install best version"),
+            ("cpu", "CPU Only", "No GPU - CPU computation only"),
+            # NVIDIA GPUs (All platforms)
+            ("cu118", "CUDA 11.8 — NVIDIA", "NVIDIA GPUs (older GTX/RTX series)"),
+            ("cu121", "CUDA 12.1 — NVIDIA", "NVIDIA RTX 20/30/40 series (recommended)"),
+            ("cu124", "CUDA 12.4 — NVIDIA", "NVIDIA RTX 40 series (latest)"),
+            # AMD GPUs (Platform-specific)
+            ("rocm57", "ROCm 5.7 — AMD (Linux)", "AMD RX 7900 series - Linux ONLY"),
+            # Apple / Intel
+            ("mps", "Metal (MPS) — Apple Silicon", "Apple M1/M2/M3 Macs"),
         ],
         default="auto",
     )

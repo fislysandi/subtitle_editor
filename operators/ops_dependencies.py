@@ -70,14 +70,22 @@ class SUBTITLE_OT_check_dependencies(Operator):
 
         all_installed = all(deps_status.values())
 
-        # Also check GPU status
+        # Also check GPU status (CUDA, MPS, XPU)
         try:
             import torch
 
+            gpu_detected = False
+
             if torch.cuda.is_available():
-                props.gpu_detected = True
-            else:
-                props.gpu_detected = False
+                gpu_detected = True
+            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                gpu_detected = True
+            elif hasattr(torch, "xpu") and torch.xpu.is_available():
+                gpu_detected = True
+
+            props.gpu_detected = gpu_detected
+        except Exception:
+            props.gpu_detected = False
         except:
             props.gpu_detected = False
 
@@ -255,13 +263,30 @@ class SUBTITLE_OT_check_gpu(Operator):
         try:
             import torch
 
+            gpu_info = []
+
+            # Check for NVIDIA CUDA
             if torch.cuda.is_available():
                 props.gpu_detected = True
                 gpu_name = torch.cuda.get_device_name(0)
-                self.report({"INFO"}, f"GPU detected: {gpu_name}")
+                gpu_info.append(f"NVIDIA: {gpu_name}")
+
+            # Check for Apple Metal (MPS)
+            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                props.gpu_detected = True
+                gpu_info.append("Apple Silicon (MPS)")
+
+            # Check for Intel XPU
+            if hasattr(torch, "xpu") and torch.xpu.is_available():
+                props.gpu_detected = True
+                gpu_info.append("Intel Arc/XPU")
+
+            if gpu_info:
+                self.report({"INFO"}, f"GPU(s) detected: {', '.join(gpu_info)}")
             else:
                 props.gpu_detected = False
                 self.report({"WARNING"}, "No GPU detected - will fallback to CPU")
+
         except ImportError:
             props.gpu_detected = False
             self.report({"WARNING"}, "PyTorch not installed - cannot check GPU")
@@ -303,8 +328,10 @@ class SUBTITLE_OT_install_pytorch(Operator):
             # Base PyTorch packages
             packages = ["torch", "torchaudio"]
 
-            # Determine index URL based on selection
+            # Determine installation method based on selection
             index_url = None
+            use_mps = False
+
             if pytorch_version == "cpu":
                 index_url = "https://download.pytorch.org/whl/cpu"
             elif pytorch_version == "cu118":
@@ -315,6 +342,9 @@ class SUBTITLE_OT_install_pytorch(Operator):
                 index_url = "https://download.pytorch.org/whl/cu124"
             elif pytorch_version == "rocm57":
                 index_url = "https://download.pytorch.org/whl/rocm5.7"
+            elif pytorch_version == "mps":
+                use_mps = True
+                # MPS is included in standard PyTorch on macOS, no special index needed
             # For "auto", don't specify index_url - let pip choose
 
             # Install PyTorch
@@ -323,6 +353,12 @@ class SUBTITLE_OT_install_pytorch(Operator):
             cmd = [python_exe, "-m", "pip", "install", "-q"] + packages
             if index_url:
                 cmd.extend(["--index-url", index_url])
+
+            # Add nightly flag for MPS if needed (usually stable has it now)
+            if use_mps:
+                # On macOS with MPS, standard PyTorch installation works
+                # No special flags needed as of PyTorch 2.0+
+                pass
 
             result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 

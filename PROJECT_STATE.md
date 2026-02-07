@@ -173,7 +173,7 @@ subtitle_editor/
 - `progress_text` - Status text
 - `current_text` - Currently editing text
 - **Dependencies:** `deps_faster_whisper`, `deps_torch`, `deps_pysubs2`, `deps_onnxruntime`, `is_installing_deps`, `deps_install_status`
-- **PyTorch Settings:** `pytorch_version` (auto/cpu/cu118/cu121/cu124/rocm57), `gpu_detected`, `is_installing_pytorch`, `pytorch_install_status`
+- **PyTorch Settings:** `pytorch_version` (auto/cpu/cu118/cu121/cu124/rocm57/mps), `gpu_detected`, `is_installing_pytorch`, `pytorch_install_status`
 
 ## 🐛 Known Issues / TODO
 
@@ -201,9 +201,13 @@ cat PROJECT_STATE.md
 
 ## 📝 Recent Changes
 
-1. **PyTorch GPU Support** - New PyTorch installation section
+1. **PyTorch GPU Support** - New PyTorch installation section with multi-GPU support
    - GPU detection with visual warning if not detected (CPU fallback)
-   - PyTorch version dropdown: Auto-detect, CPU, CUDA 11.8/12.1/12.4, ROCm 5.7
+   - Multi-backend support: NVIDIA CUDA, AMD ROCm, Apple Metal (MPS), Intel XPU
+   - PyTorch version dropdown with clear platform indicators:
+     * CUDA 11.8/12.1/12.4 for NVIDIA GPUs (all platforms)
+     * ROCm 5.7 for AMD RX 7900 series (Linux only)
+     * Metal (MPS) for Apple Silicon Macs
    - Dedicated "Install PyTorch" button
    - Status messages during installation
    - New operators: `check_gpu`, `install_pytorch`
