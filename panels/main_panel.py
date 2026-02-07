@@ -1,6 +1,6 @@
 """
 UI Panels for Subtitle Editor
-Based on upstream: https://github.com/tin2tin/Subtitle_Editor
+Simplified version matching upstream layout but using existing operators
 """
 
 import bpy
@@ -18,6 +18,7 @@ class SEQUENCER_PT_panel(Panel):
 
     def draw(self, context):
         layout = self.layout
+        scene = context.scene
 
         row = layout.row()
         col = row.column()
@@ -28,31 +29,27 @@ class SEQUENCER_PT_panel(Panel):
             "text_strip_items",
             context.scene,
             "text_strip_items_index",
-            rows=14,
+            rows=10,
         )
 
+        # Button column
         row = row.column(align=True)
-        row.operator("text.refresh_list", text="", icon="FILE_REFRESH")
 
+        # Refresh
+        row.operator("subtitle.refresh_list", text="", icon="FILE_REFRESH")
         row.separator()
 
-        row.operator("sequencer.import_subtitles", text="", icon="IMPORT")
-        row.operator("sequencer.export_list_subtitles", text="", icon="EXPORT")
-
+        # Import/Export
+        row.operator("subtitle.import_subtitles", text="", icon="IMPORT")
+        row.operator("subtitle.export_subtitles", text="", icon="EXPORT")
         row.separator()
 
-        row.operator("text.add_strip", text="", icon="ADD", emboss=True)
-        row.operator("text.delete_item", text="", icon="REMOVE", emboss=True)
-        row.operator("text.delete_strip", text="", icon="SCULPTMODE_HLT", emboss=True)
-
+        # Navigation
+        row.operator("subtitle.select_strip", text="", icon="TRIA_UP")
         row.separator()
 
-        row.operator("text.select_previous", text="", icon="TRIA_UP")
-        row.operator("text.select_next", text="", icon="TRIA_DOWN")
-
-        row.separator()
-
-        row.operator("text.insert_newline", text="", icon="EVENT_RETURN")
+        # Update
+        row.operator("subtitle.update_text", text="", icon="CHECKMARK")
 
 
 class SEQUENCER_PT_whisper_panel(Panel):
@@ -71,53 +68,53 @@ class SEQUENCER_PT_whisper_panel(Panel):
     def draw(self, context):
         layout = self.layout
         scene = context.scene
-        props = scene.whisper_props
-
-        # Setup Section
-        box = layout.box()
-        row = box.row(align=True)
-        status_icon = (
-            "CHECKMARK"
-            if hasattr(bpy.types.Scene, "dependencies_installed")
-            and bpy.types.Scene.dependencies_installed
-            else "ERROR"
-        )
-        row.label(text="Dependencies:", icon=status_icon)
-        row.operator("sequencer.whisper_setup", icon="SCRIPTPLUGINS")
+        props = scene.subtitle_editor
 
         # Configuration Section
         col = layout.column()
         box = col.box()
-        box.prop(props, "model_size", text="Model")
+        box.prop(props, "model")
         row = box.row(align=True)
-        row.prop(props, "device", text="Device")
-        row.prop(props, "compute_type", text="Compute")
-        box.prop(props, "language", text="Language")
+        row.prop(props, "device")
+        row.prop(props, "language")
         row = box.row(align=True)
-        row.prop(props, "beam_size", text="Beam Size")
-        row.prop(props, "use_vad", text="VAD Filter")
+        row.prop(props, "show_advanced", text="Advanced", toggle=True)
 
-        # Subtitle Output Settings
-        box = col.box()
-        row = box.row(align=True)
-        row.prop(props, "output_channel", text="Channel")
-        row.prop(props, "font_size", text="Font Size")
-        row = box.row(align=True)
-        row.prop(props, "text_align_y", text="")
-        row.prop(props, "wrap_width", text="Wrap Width")
+        if props.show_advanced:
+            box.prop(props, "translate")
+            box.prop(props, "word_timestamps")
+            box.prop(props, "vad_filter")
 
         # Actions Section
         box = col.box()
         action_col = box.column(align=True)
 
-        op_transcribe = action_col.operator(
-            "sequencer.whisper_transcribe", text="Transcribe to Text Strips", icon="REC"
+        # Transcribe button
+        row = action_col.row()
+        row.scale_y = 1.5
+        row.operator(
+            "subtitle.transcribe", text="Transcribe to Text Strips", icon="REC"
         )
-        op_transcribe.task = "transcribe"
 
-        op_translate = action_col.operator(
-            "sequencer.whisper_transcribe",
-            text="Translate to Text Strips (EN)",
-            icon="WORDWRAP_ON",
-        )
-        op_translate.task = "translate"
+
+class SEQUENCER_PT_edit_panel(Panel):
+    """Edit Subtitles Panel"""
+
+    bl_label = "Edit Subtitles"
+    bl_idname = "SEQUENCER_PT_edit_panel"
+    bl_space_type = "SEQUENCE_EDITOR"
+    bl_region_type = "UI"
+    bl_category = "Subtitle Editor"
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+
+        # Edit selected
+        if scene.text_strip_items_index >= 0 and scene.text_strip_items:
+            item = scene.text_strip_items[scene.text_strip_items_index]
+            box = layout.box()
+            box.label(text=f"Editing: {item.name}")
+            box.prop(scene.subtitle_editor, "current_text")
+        else:
+            layout.label(text="Select a subtitle from the list above")
