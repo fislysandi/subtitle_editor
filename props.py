@@ -282,7 +282,7 @@ class SubtitleEditorProperties(PropertyGroup):
                         if hasattr(strip, "text"):
                             strip.text = self.current_text
                         break
-            except:
+            except Exception:
                 pass
 
     # Import/Export settings
@@ -393,6 +393,28 @@ class SubtitleEditorProperties(PropertyGroup):
         name="PyTorch Install Status",
         description="Current PyTorch installation status",
         default="",
+    )
+
+    # Model download status
+    is_downloading_model: BoolProperty(
+        name="Downloading Model",
+        description="Whisper model is being downloaded",
+        default=False,
+    )
+
+    model_download_status: StringProperty(
+        name="Model Download Status",
+        description="Current model download status",
+        default="",
+    )
+
+    model_download_progress: FloatProperty(
+        name="Download Progress",
+        description="Model download progress (0-1)",
+        min=0.0,
+        max=1.0,
+        default=0.0,
+        subtype="PERCENTAGE",
     )
 
     # Text strip appearance

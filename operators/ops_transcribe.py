@@ -45,12 +45,30 @@ class SUBTITLE_OT_transcribe(Operator):
 
     def _transcribe_thread(self, context, strip, props):
         """Run transcription in background thread"""
+        # Thread-safe storage for progress data
+        progress_data = {"progress": 0.0, "text": "Starting..."}
+
+        def update_props_on_main_thread(progress, text):
+            """Schedule property updates on the main thread using bpy.app.timers"""
+            progress_data["progress"] = progress
+            progress_data["text"] = text
+
+            def apply_updates():
+                props.progress = progress_data["progress"]
+                props.progress_text = progress_data["text"]
+                return None  # Don't repeat
+
+            bpy.app.timers.register(apply_updates, first_interval=0.0)
+
         try:
             # Extract audio from strip
             filepath = sequence_utils.get_strip_filepath(strip)
             if not filepath:
-                props.progress_text = "Error: Cannot get strip file path"
-                props.is_transcribing = False
+                update_props_on_main_thread(0.0, "Error: Cannot get strip file path")
+                bpy.app.timers.register(
+                    lambda: setattr(props, "is_transcribing", False) or None,
+                    first_interval=0.0,
+                )
                 return
 
             # Initialize transcriber
@@ -60,21 +78,23 @@ class SUBTITLE_OT_transcribe(Operator):
 
             cache_dir = file_utils.get_addon_models_dir()
             if not tm.load_model(cache_dir):
-                props.progress_text = "Error: Failed to load AI model"
-                props.is_transcribing = False
+                update_props_on_main_thread(0.0, "Error: Failed to load AI model")
+                bpy.app.timers.register(
+                    lambda: setattr(props, "is_transcribing", False) or None,
+                    first_interval=0.0,
+                )
                 return
 
-            # Set up progress callback
+            # Set up progress callback - uses thread-safe updates
             def progress_callback(progress, text):
-                props.progress = progress
-                props.progress_text = text
+                update_props_on_main_thread(progress, text)
 
             tm.set_progress_callback(progress_callback)
 
             # Extract audio if needed
             audio_path = filepath
             if not filepath.lower().endswith((".wav", ".mp3", ".flac", ".m4a")):
-                props.progress_text = "Extracting audio..."
+                update_props_on_main_thread(0.0, "Extracting audio...")
                 audio_path = file_utils.get_temp_filepath("audio_extract.wav")
                 audio_path = tm.extract_audio(filepath, audio_path)
 
@@ -98,13 +118,18 @@ class SUBTITLE_OT_transcribe(Operator):
             if audio_path != filepath and os.path.exists(audio_path):
                 os.remove(audio_path)
 
-            props.progress_text = f"Created {len(segments)} subtitle strips"
+            update_props_on_main_thread(1.0, f"Created {len(segments)} subtitle strips")
 
         except Exception as e:
-            props.progress_text = f"Error: {str(e)}"
+            update_props_on_main_thread(0.0, f"Error: {str(e)}")
         finally:
-            props.is_transcribing = False
-            props.progress = 0.0
+            # Schedule cleanup on main thread
+            def cleanup_props():
+                props.is_transcribing = False
+                props.progress = 0.0
+                return None
+
+            bpy.app.timers.register(cleanup_props, first_interval=0.0)
 
     def _create_strips(self, context, segments):
         """Create text strips from transcription (called in main thread)"""
@@ -180,12 +205,30 @@ class SUBTITLE_OT_translate(Operator):
 
     def _translate_thread(self, context, strip, props):
         """Run translation in background thread"""
+        # Thread-safe storage for progress data
+        progress_data = {"progress": 0.0, "text": "Starting..."}
+
+        def update_props_on_main_thread(progress, text):
+            """Schedule property updates on the main thread using bpy.app.timers"""
+            progress_data["progress"] = progress
+            progress_data["text"] = text
+
+            def apply_updates():
+                props.progress = progress_data["progress"]
+                props.progress_text = progress_data["text"]
+                return None  # Don't repeat
+
+            bpy.app.timers.register(apply_updates, first_interval=0.0)
+
         try:
             # Extract audio from strip
             filepath = sequence_utils.get_strip_filepath(strip)
             if not filepath:
-                props.progress_text = "Error: Cannot get strip file path"
-                props.is_transcribing = False
+                update_props_on_main_thread(0.0, "Error: Cannot get strip file path")
+                bpy.app.timers.register(
+                    lambda: setattr(props, "is_transcribing", False) or None,
+                    first_interval=0.0,
+                )
                 return
 
             # Initialize transcriber
@@ -195,21 +238,23 @@ class SUBTITLE_OT_translate(Operator):
 
             cache_dir = file_utils.get_addon_models_dir()
             if not tm.load_model(cache_dir):
-                props.progress_text = "Error: Failed to load AI model"
-                props.is_transcribing = False
+                update_props_on_main_thread(0.0, "Error: Failed to load AI model")
+                bpy.app.timers.register(
+                    lambda: setattr(props, "is_transcribing", False) or None,
+                    first_interval=0.0,
+                )
                 return
 
-            # Set up progress callback
+            # Set up progress callback - uses thread-safe updates
             def progress_callback(progress, text):
-                props.progress = progress
-                props.progress_text = text
+                update_props_on_main_thread(progress, text)
 
             tm.set_progress_callback(progress_callback)
 
             # Extract audio if needed
             audio_path = filepath
             if not filepath.lower().endswith((".wav", ".mp3", ".flac", ".m4a")):
-                props.progress_text = "Extracting audio..."
+                update_props_on_main_thread(0.0, "Extracting audio...")
                 audio_path = file_utils.get_temp_filepath("audio_extract.wav")
                 audio_path = tm.extract_audio(filepath, audio_path)
 
@@ -233,13 +278,20 @@ class SUBTITLE_OT_translate(Operator):
             if audio_path != filepath and os.path.exists(audio_path):
                 os.remove(audio_path)
 
-            props.progress_text = f"Created {len(segments)} translated subtitle strips"
+            update_props_on_main_thread(
+                1.0, f"Created {len(segments)} translated subtitle strips"
+            )
 
         except Exception as e:
-            props.progress_text = f"Error: {str(e)}"
+            update_props_on_main_thread(0.0, f"Error: {str(e)}")
         finally:
-            props.is_transcribing = False
-            props.progress = 0.0
+            # Schedule cleanup on main thread
+            def cleanup_props():
+                props.is_transcribing = False
+                props.progress = 0.0
+                return None
+
+            bpy.app.timers.register(cleanup_props, first_interval=0.0)
 
     def _create_strips(self, context, segments):
         """Create text strips from translation (called in main thread)"""

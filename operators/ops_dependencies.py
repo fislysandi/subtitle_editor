@@ -102,8 +102,6 @@ class SUBTITLE_OT_check_dependencies(Operator):
             props.gpu_detected = gpu_detected
         except Exception:
             props.gpu_detected = False
-        except:
-            props.gpu_detected = False
 
         if all_installed:
             if props.gpu_detected:

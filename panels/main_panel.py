@@ -164,9 +164,20 @@ class SEQUENCER_PT_whisper_panel(Panel):
             row.alert = True
             row.label(text="⚠ Select backend and click Install PyTorch", icon="ERROR")
 
-        # Model dropdown
+        # Model dropdown with download button
         box = col.box()
-        box.prop(props, "model")
+        row = box.row(align=True)
+        row.prop(props, "model", text="")
+        row.operator("subtitle.download_model", text="Download", icon="IMPORT")
+
+        # Show download progress if downloading
+        if props.is_downloading_model:
+            row = box.row()
+            row.prop(props, "model_download_status", text="", emboss=False)
+            row = box.row()
+            row.prop(
+                props, "model_download_progress", text="Download Progress", slider=True
+            )
 
         # Device | Compute Type row
         row = box.row(align=True)
