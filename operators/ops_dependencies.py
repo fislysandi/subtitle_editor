@@ -22,6 +22,16 @@ class SUBTITLE_OT_check_dependencies(Operator):
     def execute(self, context):
         props = context.scene.subtitle_editor
 
+        # Debug: Print Python paths
+        print("\n=== Subtitle Editor Dependency Check ===")
+        print(f"Python executable: {sys.executable}")
+        print(f"Python version: {sys.version}")
+        print(f"sys.path contains {len(sys.path)} paths:")
+        for i, p in enumerate(sys.path[:5]):  # Print first 5 paths
+            print(f"  {i}: {p}")
+        if len(sys.path) > 5:
+            print(f"  ... and {len(sys.path) - 5} more paths")
+
         # Check each dependency
         deps_status = {
             "faster_whisper": False,
@@ -35,32 +45,38 @@ class SUBTITLE_OT_check_dependencies(Operator):
             import faster_whisper
 
             deps_status["faster_whisper"] = True
-        except ImportError:
-            pass
+            print("✓ faster_whisper found")
+        except ImportError as e:
+            print(f"✗ faster_whisper not found: {e}")
 
         # Check torch
         try:
             import torch
 
             deps_status["torch"] = True
-        except ImportError:
-            pass
+            print("✓ torch found")
+        except ImportError as e:
+            print(f"✗ torch not found: {e}")
 
         # Check pysubs2
         try:
             import pysubs2
 
             deps_status["pysubs2"] = True
-        except ImportError:
-            pass
+            print("✓ pysubs2 found")
+        except ImportError as e:
+            print(f"✗ pysubs2 not found: {e}")
 
         # Check onnxruntime
         try:
             import onnxruntime
 
             deps_status["onnxruntime"] = True
-        except ImportError:
-            pass
+            print("✓ onnxruntime found")
+        except ImportError as e:
+            print(f"✗ onnxruntime not found: {e}")
+
+        print("========================================\n")
 
         # Update properties
         props.deps_faster_whisper = deps_status["faster_whisper"]
