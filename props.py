@@ -80,25 +80,25 @@ class SubtitleEditorProperties(PropertyGroup):
             # English-Only Models
             (
                 "tiny.en",
-                "Tiny.en — English Only (~39M)",
+                "Tiny.EN — English Only (~39M)",
                 "Fastest English transcription",
             ),
-            ("base.en", "Base.en — English Only (~74M)", "Fast English transcription"),
+            ("base.en", "Base.EN — English Only (~74M)", "Fast English transcription"),
             (
                 "small.en",
-                "Small.en — English Only (~244M)",
+                "Small.EN — English Only (~244M)",
                 "Balanced English transcription",
             ),
-            ("medium.en", "Medium.en — English Only (~769M)", "High quality English"),
+            ("medium.en", "Medium.EN — English Only (~769M)", "High quality English"),
             # Distilled Models (Faster, English-Only)
             (
                 "distil-small.en",
-                "Distil-Small.en — English (~111M)",
+                "Distil-Small.EN — English (~111M)",
                 "Distilled, very fast",
             ),
             (
                 "distil-medium.en",
-                "Distil-Medium.en — English (~394M)",
+                "Distil-Medium.EN — English (~394M)",
                 "Distilled, fast",
             ),
             (
