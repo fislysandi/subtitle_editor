@@ -140,7 +140,100 @@ def draw(self, context):
 2. **bpy imports in core/** - Keep core/ Blender-agnostic
 3. **Missing type annotations** - All bpy.props need types
 4. **GPU icon** - Does not exist, use `"PREFERENCES"`
-5. **Blocking operations** - Use threading + timers for heavy work
+5. **Blocking operations** - See Non-Blocking Operations section below
+
+## 🔄 Non-Blocking Operations (CRITICAL)
+
+### Python's GIL Problem
+Python's **Global Interpreter Lock (GIL)** means CPU-bound operations in threads can STILL block Blender's UI. For heavy operations like model downloads, use **Modal Operators** instead of threading.
+
+### ❌ INCORRECT - Threading blocks UI for CPU-intensive tasks
+```python
+def execute(self, context):
+    thread = threading.Thread(target=self._worker)
+    thread.start()
+    return {'FINISHED'}
+
+def _worker(self):
+    # CPU-intensive work here STILL blocks UI due to GIL
+    WhisperModel(...)  # Blocks!
+```
+
+### ✅ CORRECT - Modal Operator for non-blocking operations
+```python
+class ModalDownloadOperator(bpy.types.Operator):
+    """Modal operator for non-blocking downloads"""
+    bl_idname = "subtitle.modal_download"
+    bl_label = "Download"
+    
+    _timer = None
+    _queue = None
+    
+    def modal(self, context, event):
+        if event.type == 'TIMER':
+            # Check for updates from thread/process
+            self.check_progress()
+            
+            # Force UI redraw
+            for area in context.screen.areas:
+                area.tag_redraw()
+        
+        if self.is_complete:
+            self.cancel(context)
+            return {'FINISHED'}
+        
+        return {'PASS_THROUGH'}
+    
+    def execute(self, context):
+        self._queue = queue.Queue()
+        self.is_complete = False
+        
+        # Start background work
+        thread = threading.Thread(target=self._worker)
+        thread.start()
+        
+        # Add timer and modal handler
+        wm = context.window_manager
+        self._timer = wm.event_timer_add(0.1, window=context.window)
+        wm.modal_handler_add(self)
+        
+        return {'RUNNING_MODAL'}
+    
+    def cancel(self, context):
+        wm = context.window_manager
+        wm.event_timer_remove(self._timer)
+    
+    def _worker(self):
+        # Do heavy work...
+        # Put progress updates in queue
+        self._queue.put({'progress': 0.5})
+        # When done:
+        self.is_complete = True
+    
+    def check_progress(self):
+        # Process queue updates
+        while not self._queue.empty():
+            msg = self._queue.get()
+            # Update properties from main thread
+```
+
+### Key Points for Non-Blocking Operations:
+
+1. **Use Modal Operators** - `return {'RUNNING_MODAL'}` keeps operator alive
+2. **Add Event Timer** - `wm.event_timer_add(0.1, window=context.window)`
+3. **Force UI Redraw** - `area.tag_redraw()` updates progress bars
+4. **Use Queues** - Thread-safe communication between thread and main thread
+5. **Return 'PASS_THROUGH'** - Allows Blender to process other events
+6. **Clean up in cancel()** - Always remove timers when done
+
+### When to Use What:
+
+| Pattern | Use For | UI Blocking |
+|---------|---------|-------------|
+| `threading` + `bpy.app.timers` | I/O operations (file read/write) | No |
+| `threading` + `bpy.app.timers` | CPU-intensive work | **YES** (GIL) |
+| **Modal Operator** + `threading` | CPU-intensive work | **No** |
+| `multiprocessing` | Heavy CPU work | No (separate process) |
 
 ## 🧪 Testing
 
