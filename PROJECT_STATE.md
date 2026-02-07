@@ -1,6 +1,6 @@
 # Subtitle Editor - Project State
 
-**Last Updated:** 2025-02-07  
+**Last Updated:** 2025-02-07 (Commit: 0c4d3f2)  
 **Addon Location:** `addons/subtitle_editor/`
 
 ## 📍 Current Status
@@ -17,10 +17,13 @@
 **Original Author:** tin2tin
 
 ### Features
-- 🤖 **AI Transcription** using Faster Whisper
-- 📝 **Subtitle editing** with list-based UI
-- 🌍 **Multi-language support**
+- 🤖 **AI Transcription** using Faster Whisper (19 models available)
+- 🌐 **Translation to English** with dedicated operator
+- 📝 **Subtitle editing** with list-based UI (integrated into main panel)
+- 🌍 **Multi-language support** (multilingual & English-only models)
 - 📥 **Import/Export** (SRT, VTT, ASS formats)
+- ⚙️ **Advanced settings**: beam size, max words per strip, font size, alignment
+- 🔧 **Dependency management** with install/verify functionality
 - 🔥 **Hot-reload** during development
 
 ## ✅ Completed Migration Tasks
@@ -90,9 +93,10 @@ subtitle_editor/
 │
 ├── operators/               # Blender operators (auto-registered)
 │   ├── __init__.py
+│   ├── ops_dependencies.py  # Dependency management operators
 │   ├── ops_import_export.py # Import/export operators
 │   ├── ops_strip_edit.py    # List edit operators
-│   └── ops_transcribe.py    # Transcription operator
+│   └── ops_transcribe.py    # Transcription & translation operators
 │
 ├── panels/                  # UI panels (framework convention)
 │   ├── __init__.py
@@ -124,16 +128,18 @@ subtitle_editor/
 
 ### Operators
 - `subtitle.transcribe` - Transcribe audio to subtitles
+- `subtitle.translate` - Translate non-English audio to English subtitles
 - `subtitle.import_subtitles` - Import subtitle files
 - `subtitle.export_subtitles` - Export subtitle files
 - `subtitle.refresh_list` - Refresh subtitle list
 - `subtitle.select_strip` - Select strip from list
 - `subtitle.update_text` - Update subtitle text
+- `subtitle.check_dependencies` - Check if dependencies are installed
+- `subtitle.install_dependencies` - Install missing dependencies
 
 ### Panels
-- `SEQUENCER_PT_panel` - Main panel with UIList
-- `SEQUENCER_PT_whisper_panel` - Transcription settings
-- `SEQUENCER_PT_edit_panel` - Subtitle editing
+- `SEQUENCER_PT_panel` - Main panel with UIList and integrated editing
+- `SEQUENCER_PT_whisper_panel` - Transcription & Translation settings (Dependencies, Model, Advanced options)
 
 ### UIList
 - `SEQUENCER_UL_List` - Displays text strips
@@ -147,25 +153,35 @@ subtitle_editor/
 
 **SubtitleEditorProperties:**
 - `language` - Transcription language
-- `model` - Whisper model (tiny, base, small, medium, large-v3)
+- `model` - Whisper model (19 options: tiny to turbo, multilingual & English-only)
 - `device` - Compute device (auto, cpu, cuda)
+- `compute_type` - Computation precision (default, int8, float16, float32)
+- `beam_size` - Beam search size (1-10)
+- `max_words_per_strip` - Max words before creating new strip (0-20, 0=unlimited)
 - `translate` - Translate to English
 - `word_timestamps` - Word-level timestamps
 - `vad_filter` - Voice activity detection
 - `show_advanced` - Show advanced options
+- `subtitle_channel` - Default channel for new strips
+- `subtitle_font_size` - Default font size (8-200)
+- `v_align` - Vertical alignment (Top/Center/Bottom)
+- `wrap_width` - Text wrap width factor (0-1)
 - `is_transcribing` - Transcription in progress
 - `progress` - Progress (0-1)
 - `progress_text` - Status text
 - `current_text` - Currently editing text
+- **Dependencies:** `deps_faster_whisper`, `deps_torch`, `deps_pysubs2`, `deps_onnxruntime`, `is_installing_deps`, `deps_install_status`
 
 ## 🐛 Known Issues / TODO
 
-- [ ] Add progress callback during transcription
+- [x] Add progress callback during transcription
+- [x] Implement dependency management UI
 - [ ] Implement batch styling (copy style to selected)
 - [ ] Add line break insertion
 - [ ] Test all import/export formats
 - [ ] Add file browser panels for import/export
 - [ ] Optimize transcription performance
+- [ ] Add PyTorch version selection in dependency installer
 
 ## 🔄 To Resume Work
 
@@ -180,10 +196,33 @@ cat PROJECT_STATE.md
 
 ## 📝 Recent Changes
 
-1. **UI Update** - Matched upstream tin2tin layout style
-2. **Framework Migration** - Migrated to auto-load system
-3. **UV Integration** - Dependency management via UV
-4. **Bug Fixes** - Fixed EnumProperty, removed duplicates
+1. **Major UI Redesign** - Complete overhaul of Transcription & Translation panel
+   - Added Dependencies section with install/verify functionality
+   - Reorganized layout: Dependencies → Model → Device/Compute → Language → Settings → Actions
+   - Added 19 Whisper models with clear multilingual/English grouping
+   - New controls: Beam Size, Max Words per Strip, Channel, Font Size, V Align, Wrap Width
+   - Integrated edit section into main panel (removed separate panel)
+   - VAD Filter now displays as checkbox
+
+2. **New Operators**
+   - `subtitle.translate` - Dedicated translation to English
+   - `subtitle.check_dependencies` - Check dependency installation status
+   - `subtitle.install_dependencies` - Install missing dependencies (with future PyTorch version selection)
+
+3. **New Properties**
+   - `compute_type` - Computation precision (int8, float16, float32)
+   - `beam_size` - Beam search size (1-10)
+   - `max_words_per_strip` - Word limit per subtitle strip (0-20)
+   - `subtitle_channel` - Default channel for new strips
+   - `subtitle_font_size` - Font size control (8-200)
+   - `v_align` - Vertical alignment (Top/Center/Bottom)
+   - `wrap_width` - Text wrapping factor (0-1)
+   - Dependency tracking: `deps_*` status properties
+
+4. **Previous**
+   - UI Update - Matched upstream tin2tin layout style
+   - Framework Migration - Migrated to auto-load system
+   - UV Integration - Dependency management via UV
 
 ## 💡 For AI Assistant
 
@@ -208,12 +247,13 @@ cat PROJECT_STATE.md
 
 ## 📊 Quick Stats
 
-- **Total Files:** 28
-- **Operators:** 6
-- **Panels:** 3
+- **Total Files:** 29
+- **Operators:** 9
+- **Panels:** 2
 - **Property Groups:** 2
 - **Dependencies:** 3 (faster-whisper, pysubs2, onnxruntime)
-- **Lines of Code:** ~2000+
+- **Whisper Models:** 19 (multilingual, English-only, distilled, turbo)
+- **Lines of Code:** ~2600+
 
 ## 🔗 Important Links
 
