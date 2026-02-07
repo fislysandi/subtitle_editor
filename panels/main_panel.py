@@ -1,135 +1,123 @@
 """
 UI Panels for Subtitle Editor
+Based on upstream: https://github.com/tin2tin/Subtitle_Editor
 """
 
 import bpy
 from bpy.types import Panel
 
 
-class SUBTITLE_PT_main_panel(Panel):
+class SEQUENCER_PT_panel(Panel):
     """Main Subtitle Editor Panel"""
 
+    bl_idname = "SEQUENCER_PT_panel"
     bl_label = "Subtitle Editor"
-    bl_idname = "SUBTITLE_PT_main_panel"
     bl_space_type = "SEQUENCE_EDITOR"
     bl_region_type = "UI"
-    bl_category = "Subtitle"
+    bl_category = "Subtitle Editor"
 
     def draw(self, context):
         layout = self.layout
-        scene = context.scene
-        props = scene.subtitle_editor
 
-        # Dependency status
-        box = layout.box()
-        box.label(text="Dependencies", icon="CHECKBOX_HLT")
-        box.label(text="✓ Ready" if not props.is_transcribing else "⟳ Loading...")
-
-        layout.separator()
-
-        # Selected strip info
-        box = layout.box()
-        box.label(text="Selected Strip", icon="SEQUENCE")
-
-        strip = None
-        if scene.sequence_editor:
-            for s in scene.sequence_editor.sequences_all:
-                if s.select:
-                    strip = s
-                    break
-
-        if strip:
-            box.label(text=f"Name: {strip.name}")
-            box.label(text=f"Type: {strip.type}")
-        else:
-            box.label(text="No strip selected", icon="ERROR")
-
-
-class SUBTITLE_PT_transcription_panel(Panel):
-    """Transcription settings panel"""
-
-    bl_label = "Transcription"
-    bl_idname = "SUBTITLE_PT_transcription_panel"
-    bl_space_type = "SEQUENCE_EDITOR"
-    bl_region_type = "UI"
-    bl_category = "Subtitle"
-    bl_parent_id = "SUBTITLE_PT_main_panel"
-
-    def draw(self, context):
-        layout = self.layout
-        scene = context.scene
-        props = scene.subtitle_editor
-
-        # Language
-        layout.prop(props, "language")
-
-        # Model
-        layout.prop(props, "model")
-
-        # Device
-        layout.prop(props, "device")
-
-        # Advanced options
         row = layout.row()
-        row.prop(props, "show_advanced", toggle=True)
-
-        if props.show_advanced:
-            box = layout.box()
-            box.prop(props, "translate")
-            box.prop(props, "word_timestamps")
-            box.prop(props, "vad_filter")
-
-        layout.separator()
-
-        # Progress
-        if props.is_transcribing:
-            box = layout.box()
-            box.label(text="Transcribing...", icon="SORTTIME")
-            box.prop(props, "progress", slider=True)
-            box.label(text=props.progress_text)
-        else:
-            # Transcribe button
-            row = layout.row()
-            row.scale_y = 1.5
-            row.operator("subtitle.transcribe", icon="PLAY")
-
-
-class SUBTITLE_PT_edit_panel(Panel):
-    """Subtitle editing panel"""
-
-    bl_label = "Edit Subtitles"
-    bl_idname = "SUBTITLE_PT_edit_panel"
-    bl_space_type = "SEQUENCE_EDITOR"
-    bl_region_type = "UI"
-    bl_category = "Subtitle"
-    bl_parent_id = "SUBTITLE_PT_main_panel"
-
-    def draw(self, context):
-        layout = self.layout
-        scene = context.scene
-
-        # List of text strips
-        layout.label(text="Subtitle Strips:")
-        row = layout.row()
-        row.template_list(
-            "SUBTITLE_UL_text_strips",
+        col = row.column()
+        col.template_list(
+            "SEQUENCER_UL_List",
             "",
-            scene,
+            context.scene,
             "text_strip_items",
-            scene,
+            context.scene,
             "text_strip_items_index",
+            rows=14,
         )
 
-        # Edit selected
-        if scene.text_strip_items_index >= 0 and scene.text_strip_items:
-            item = scene.text_strip_items[scene.text_strip_items_index]
-            box = layout.box()
-            box.label(text=f"Editing: {item.name}")
-            box.prop(scene.subtitle_editor, "current_text")
+        row = row.column(align=True)
+        row.operator("text.refresh_list", text="", icon="FILE_REFRESH")
 
-        layout.separator()
+        row.separator()
 
-        # Import/Export
-        row = layout.row(align=True)
-        row.operator("subtitle.import_subtitles", icon="IMPORT")
-        row.operator("subtitle.export_subtitles", icon="EXPORT")
+        row.operator("sequencer.import_subtitles", text="", icon="IMPORT")
+        row.operator("sequencer.export_list_subtitles", text="", icon="EXPORT")
+
+        row.separator()
+
+        row.operator("text.add_strip", text="", icon="ADD", emboss=True)
+        row.operator("text.delete_item", text="", icon="REMOVE", emboss=True)
+        row.operator("text.delete_strip", text="", icon="SCULPTMODE_HLT", emboss=True)
+
+        row.separator()
+
+        row.operator("text.select_previous", text="", icon="TRIA_UP")
+        row.operator("text.select_next", text="", icon="TRIA_DOWN")
+
+        row.separator()
+
+        row.operator("text.insert_newline", text="", icon="EVENT_RETURN")
+
+
+class SEQUENCER_PT_whisper_panel(Panel):
+    """Transcription & Translation Panel"""
+
+    bl_label = "Transcription & Translation"
+    bl_idname = "SEQUENCER_PT_whisper"
+    bl_space_type = "SEQUENCE_EDITOR"
+    bl_region_type = "UI"
+    bl_category = "Subtitle Editor"
+
+    @classmethod
+    def poll(cls, context):
+        return context.scene is not None
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+        props = scene.whisper_props
+
+        # Setup Section
+        box = layout.box()
+        row = box.row(align=True)
+        status_icon = (
+            "CHECKMARK"
+            if hasattr(bpy.types.Scene, "dependencies_installed")
+            and bpy.types.Scene.dependencies_installed
+            else "ERROR"
+        )
+        row.label(text="Dependencies:", icon=status_icon)
+        row.operator("sequencer.whisper_setup", icon="SCRIPTPLUGINS")
+
+        # Configuration Section
+        col = layout.column()
+        box = col.box()
+        box.prop(props, "model_size", text="Model")
+        row = box.row(align=True)
+        row.prop(props, "device", text="Device")
+        row.prop(props, "compute_type", text="Compute")
+        box.prop(props, "language", text="Language")
+        row = box.row(align=True)
+        row.prop(props, "beam_size", text="Beam Size")
+        row.prop(props, "use_vad", text="VAD Filter")
+
+        # Subtitle Output Settings
+        box = col.box()
+        row = box.row(align=True)
+        row.prop(props, "output_channel", text="Channel")
+        row.prop(props, "font_size", text="Font Size")
+        row = box.row(align=True)
+        row.prop(props, "text_align_y", text="")
+        row.prop(props, "wrap_width", text="Wrap Width")
+
+        # Actions Section
+        box = col.box()
+        action_col = box.column(align=True)
+
+        op_transcribe = action_col.operator(
+            "sequencer.whisper_transcribe", text="Transcribe to Text Strips", icon="REC"
+        )
+        op_transcribe.task = "transcribe"
+
+        op_translate = action_col.operator(
+            "sequencer.whisper_transcribe",
+            text="Translate to Text Strips (EN)",
+            icon="WORDWRAP_ON",
+        )
+        op_translate.task = "translate"
