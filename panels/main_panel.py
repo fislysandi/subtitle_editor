@@ -164,23 +164,53 @@ class SEQUENCER_PT_whisper_panel(Panel):
             row.alert = True
             row.label(text="⚠ Select backend and click Install PyTorch", icon="ERROR")
 
-        # Model dropdown with download button
+        # Model sizes mapping for all 19 models
+        model_sizes = {
+            "tiny": "39 MB",
+            "tiny.en": "39 MB",
+            "base": "74 MB",
+            "base.en": "74 MB",
+            "small": "244 MB",
+            "small.en": "244 MB",
+            "medium": "769 MB",
+            "medium.en": "769 MB",
+            "large-v1": "1550 MB",
+            "large-v2": "1550 MB",
+            "large-v3": "1550 MB",
+            "large": "1550 MB",
+            "distil-small.en": "111 MB",
+            "distil-medium.en": "394 MB",
+            "distil-large-v2": "756 MB",
+            "distil-large-v3": "756 MB",
+            "distil-large-v3.5": "756 MB",
+            "large-v3-turbo": "809 MB",
+            "turbo": "809 MB",
+        }
+
+        # Model dropdown with download/cancel button
         box = col.box()
         row = box.row(align=True)
         row.prop(props, "model", text="")
 
-        # Download button (disabled while downloading)
         if props.is_downloading_model:
-            row.label(text="Downloading...", icon="FILE_REFRESH")
-        else:
-            row.operator("subtitle.download_model", text="Download", icon="IMPORT")
+            # Show cancel button instead of download button
+            row.operator("subtitle.cancel_download", text="Cancel", icon="CANCEL")
 
-        # Show download progress if downloading
-        if props.is_downloading_model:
-            box.prop(props, "model_download_status", text="Status", emboss=False)
+            # Show progress bar
             box.prop(
                 props, "model_download_progress", text="Download Progress", slider=True
             )
+
+            # Show status message
+            box.label(text=props.model_download_status, icon="FILE_REFRESH")
+        else:
+            # Show download button
+            row.operator("subtitle.download_model", text="Download", icon="IMPORT")
+
+            # Show model size info when not downloading
+            if props.model in model_sizes:
+                row = box.row()
+                row.label(text=f"Size: {model_sizes[props.model]}", icon="INFO")
 
         # Device | Compute Type row
         row = box.row(align=True)

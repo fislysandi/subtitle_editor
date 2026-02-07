@@ -1,254 +1,158 @@
 """
-Model Download Operator
+Model Download Operator - UI Layer Only
 
-Handles downloading Whisper models on demand using Modal Operator pattern
-to prevent UI freezing during CPU-intensive model loading.
+Uses DownloadManager from core module for actual download logic.
+Implements proper Modal Operator pattern for non-blocking UI.
 """
 
 import bpy
 import threading
-import queue
+from typing import Optional
 from bpy.types import Operator
+from ..core.download_manager import (
+    DownloadManager,
+    DownloadStatus,
+    create_download_manager,
+)
 from ..utils import file_utils
 
 
 class SUBTITLE_OT_download_model(Operator):
-    """Download the selected Whisper model"""
+    """Download Whisper model with real progress tracking"""
 
     bl_idname = "subtitle.download_model"
     bl_label = "Download Model"
-    bl_description = (
-        "Download the selected Whisper model (large models may take several minutes)"
-    )
-    bl_options = {"REGISTER"}
+    bl_description = "Download the selected Whisper model"
+    bl_options = {"REGISTER", "UNDO"}
 
+    # Modal operator state (class variables to persist across modal calls)
     _timer = None
+    _download_manager = None
     _thread = None
-    _queue = None
-    _is_complete = False
     _model_name = None
 
     def modal(self, context, event):
         """
         Called repeatedly by Blender's event loop.
-        Processes queue updates and updates UI without blocking.
+        CRITICAL: Must return quickly, do heavy work in thread.
         """
         props = context.scene.subtitle_editor
 
         if event.type == "TIMER":
-            # Process all pending messages from the worker thread
-            while not self._queue.empty():
-                try:
-                    msg = self._queue.get_nowait()
-                    msg_type = msg.get("type")
+            # Poll download manager for progress (fast operation)
+            if self._download_manager:
+                progress = self._download_manager.get_progress()
 
-                    if msg_type == "status":
-                        props.model_download_status = msg.get("text", "")
-                    elif msg_type == "progress":
-                        progress_value = msg.get("value", 0.0)
-                        props.model_download_progress = progress_value
-                        # Update Blender's built-in progress bar (bottom status bar)
-                        wm = context.window_manager
-                        wm.progress_update(int(progress_value * 100))
-                    elif msg_type == "error":
-                        props.model_download_status = f"Error: {msg.get('text', '')}"
-                        self.report(
-                            {"ERROR"},
-                            f"Failed to download model: {msg.get('text', '')}",
-                        )
-                        self._is_complete = True
-                    elif msg_type == "success":
-                        props.model_download_status = msg.get("text", "")
-                        self.report(
-                            {"INFO"}, msg.get("text", "Model downloaded successfully!")
-                        )
-                        self._is_complete = True
-                    elif msg_type == "complete":
-                        self._is_complete = True
+                # Update UI properties
+                props.model_download_progress = progress.percentage
+                props.model_download_status = progress.message
 
-                except queue.Empty:
-                    break
+                # Update Blender's built-in progress bar
+                wm = context.window_manager
+                wm.progress_update(int(progress.percentage * 100))
 
-            # Force UI redraw to update progress bar
+                # Check if complete
+                if progress.status in [
+                    DownloadStatus.COMPLETE,
+                    DownloadStatus.ERROR,
+                    DownloadStatus.CANCELLED,
+                ]:
+                    # Show final message
+                    if progress.status == DownloadStatus.COMPLETE:
+                        self.report({"INFO"}, progress.message)
+                    elif progress.status == DownloadStatus.ERROR:
+                        self.report({"ERROR"}, progress.message)
+
+                    # End modal operator
+                    self.cancel(context)
+                    return {"FINISHED"}
+
+            # CRITICAL: Force UI redraw (from technical-domain.md)
             for area in context.screen.areas:
                 area.tag_redraw()
 
-        if self._is_complete:
-            self.cancel(context)
-            props.is_downloading_model = False
-            return {"FINISHED"}
-
+        # CRITICAL: Return PASS_THROUGH to keep Blender responsive
+        # (from technical-domain.md)
         return {"PASS_THROUGH"}
 
     def execute(self, context):
         """
-        Start the modal operator.
+        Start modal operator.
         Sets up timer, modal handler, and background thread.
         """
         props = context.scene.subtitle_editor
         self._model_name = props.model
 
-        print(f"[Subtitle Editor] Starting model download for: {self._model_name}")
-
-        # Check if faster-whisper is installed
+        # Check faster-whisper available
         try:
             from faster_whisper import WhisperModel
-
-            print("[Subtitle Editor] faster-whisper imported successfully")
-        except ImportError as e:
-            error_msg = f"faster-whisper not installed: {e}"
-            print(f"[Subtitle Editor] ERROR: {error_msg}")
-            self.report({"ERROR"}, error_msg)
+        except ImportError:
+            self.report({"ERROR"}, "faster-whisper not installed")
             return {"CANCELLED"}
 
-        # Initialize modal operator state
-        self._queue = queue.Queue()
-        self._is_complete = False
+        # Initialize state
         props.is_downloading_model = True
-        props.model_download_status = f"Preparing to download {self._model_name}..."
         props.model_download_progress = 0.0
+        props.model_download_status = f"Starting download of {self._model_name}..."
 
-        # Start Blender's built-in progress bar (appears in bottom status bar)
-        wm = context.window_manager
-        wm.progress_begin(0, 100)
+        # Create download manager (dependency injection)
+        cache_dir = file_utils.get_addon_models_dir()
+        self._download_manager = create_download_manager(cache_dir)
 
-        # Start background thread for the heavy work
+        # Get optional HF token from addon preferences
+        preferences = context.preferences.addons.get("subtitle_editor")
+        hf_token = None
+        if preferences and hasattr(preferences, "preferences"):
+            hf_token = preferences.preferences.hf_token or None
+
+        # Start background thread (heavy work here)
         self._thread = threading.Thread(
-            target=self._download_worker, args=(self._model_name,)
+            target=self._download_worker, args=(self._model_name, hf_token)
         )
         self._thread.daemon = True
         self._thread.start()
 
-        # Add modal handler and timer (critical for non-blocking operation)
+        # Setup modal operator (from technical-domain.md)
         wm = context.window_manager
+        wm.progress_begin(0, 100)
         self._timer = wm.event_timer_add(0.1, window=context.window)
         wm.modal_handler_add(self)
 
-        print(f"[Subtitle Editor] Modal operator started, download thread running")
+        # CRITICAL: Return RUNNING_MODAL (from technical-domain.md)
         return {"RUNNING_MODAL"}
 
     def cancel(self, context):
         """
         Clean up when operator finishes or is cancelled.
-        Always remove the timer and end progress bar to prevent memory leaks.
+        CRITICAL: Always remove timer to prevent memory leaks.
         """
+        props = context.scene.subtitle_editor
+
+        # Cancel download if running
+        if self._download_manager:
+            self._download_manager.cancel()
+
+        # Remove timer (from technical-domain.md)
         if self._timer:
             wm = context.window_manager
             wm.event_timer_remove(self._timer)
+            wm.progress_end()
             self._timer = None
-            print("[Subtitle Editor] Modal operator timer removed")
 
-        # End Blender's built-in progress bar
-        wm = context.window_manager
-        wm.progress_end()
-        print("[Subtitle Editor] Progress bar ended")
+        props.is_downloading_model = False
 
-    def _download_worker(self, model_name):
+    def _download_worker(self, model_name: str, token: Optional[str]):
         """
-        Download model in background thread.
-        Uses queue to communicate with modal() method instead of bpy.app.timers.
+        Background thread - does heavy lifting.
+        Separated from UI logic (single responsibility).
         """
         try:
-            from faster_whisper import WhisperModel
-            import os
-
-            cache_dir = file_utils.get_addon_models_dir()
-            print(f"[Subtitle Editor] Download thread started for {model_name}")
-            print(f"[Subtitle Editor] Cache directory: {cache_dir}")
-
-            # Set Hugging Face token if available in addon preferences
-            preferences = bpy.context.preferences.addons.get("subtitle_editor")
-            if preferences and hasattr(preferences, "preferences"):
-                hf_token = preferences.preferences.hf_token
-                if hf_token:
-                    os.environ["HF_TOKEN"] = hf_token
-                    print("[Subtitle Editor] HF_TOKEN set from addon preferences")
-                else:
-                    print(
-                        "[Subtitle Editor] No HF_TOKEN set (optional, but recommended for faster downloads)"
-                    )
-
-            # Update status via queue
-            self._queue.put(
-                {"type": "status", "text": f"Checking if {model_name} exists..."}
-            )
-            self._queue.put({"type": "progress", "value": 0.1})
-
-            # Check if model already exists
-            model_path = os.path.join(
-                cache_dir, f"models--Systran--faster-whisper-{model_name}"
-            )
-            if os.path.exists(model_path):
-                print(
-                    f"[Subtitle Editor] Model {model_name} already exists at {model_path}"
-                )
-                self._queue.put(
-                    {
-                        "type": "status",
-                        "text": f"Model {model_name} already downloaded!",
-                    }
-                )
-                self._queue.put({"type": "progress", "value": 1.0})
-                self._queue.put(
-                    {
-                        "type": "success",
-                        "text": f"Model {model_name} already downloaded!",
-                    }
-                )
-                self._queue.put({"type": "complete"})
-                return
-
-            # Download model
-            self._queue.put(
-                {
-                    "type": "status",
-                    "text": f"Downloading {model_name}... This may take several minutes",
-                }
-            )
-            self._queue.put({"type": "progress", "value": 0.2})
-            print(
-                f"[Subtitle Editor] Starting WhisperModel instantiation for {model_name}"
-            )
-
-            # This will download if not present
-            # Use local_files_only=False to force download
-            model = WhisperModel(
-                model_name,
-                device="cpu",
-                compute_type="int8",
-                download_root=cache_dir,
-                local_files_only=False,
-            )
-
-            print(f"[Subtitle Editor] Model {model_name} loaded successfully")
-            self._queue.put(
-                {
-                    "type": "status",
-                    "text": f"Model {model_name} downloaded successfully!",
-                }
-            )
-            self._queue.put({"type": "progress", "value": 1.0})
-            self._queue.put(
-                {
-                    "type": "success",
-                    "text": f"Model {model_name} downloaded successfully!",
-                }
-            )
-
-        except Exception as e:
-            error_msg = str(e)
-            print(f"[Subtitle Editor] ERROR downloading model: {error_msg}")
-            import traceback
-
-            traceback.print_exc()
-
-            self._queue.put({"type": "error", "text": error_msg})
-
-        finally:
-            # Signal completion
-            self._queue.put({"type": "complete"})
+            # This blocks until complete, but runs in background thread
+            # Modal() continues to poll for progress
+            self._download_manager.download(model_name, token=token)
+        except Exception:
+            # Error already handled in download manager
+            pass
 
 
-classes = [
-    SUBTITLE_OT_download_model,
-]
+classes = [SUBTITLE_OT_download_model]
