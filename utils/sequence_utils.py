@@ -13,7 +13,7 @@ def get_selected_strip(context) -> Optional[Any]:
     if not context.scene.sequence_editor:
         return None
 
-    selected = [s for s in context.scene.sequence_editor.sequences_all if s.select]
+    selected = [s for s in context.scene.sequence_editor.sequences if s.select]
     if selected:
         return selected[0]
     return None
@@ -52,7 +52,11 @@ def create_text_strip(
 
     # Create text strip
     strip = scene.sequence_editor.sequences.new_effect(
-        name=name, type="TEXT", channel=channel, frame_start=frame_start, frame_end=frame_end
+        name=name,
+        type="TEXT",
+        channel=channel,
+        frame_start=frame_start,
+        frame_end=frame_end,
     )
 
     # Set text properties
@@ -77,7 +81,7 @@ def refresh_list(context):
         return
 
     # Add all text strips
-    for strip in context.scene.sequence_editor.sequences_all:
+    for strip in context.scene.sequence_editor.sequences:
         if strip.type == "TEXT":
             item = context.scene.text_strip_items.add()
             item.name = strip.name
@@ -93,7 +97,7 @@ def get_text_strips(scene) -> List[Any]:
     if not scene.sequence_editor:
         return []
 
-    return [s for s in scene.sequence_editor.sequences_all if s.type == "TEXT"]
+    return [s for s in scene.sequence_editor.sequences if s.type == "TEXT"]
 
 
 def update_text_strip(strip, text: str):

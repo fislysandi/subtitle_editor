@@ -114,7 +114,7 @@ class SUBTITLE_OT_transcribe(Operator):
         channel = 3
         if scene.sequence_editor:
             # Find empty channel
-            for seq in scene.sequence_editor.sequences_all:
+            for seq in scene.sequence_editor.sequences:
                 if seq.channel >= channel:
                     channel = seq.channel + 1
             channel = min(channel, 128)
@@ -250,7 +250,7 @@ class SUBTITLE_OT_translate(Operator):
         channel = props.subtitle_channel
         if scene.sequence_editor:
             # Find empty channel
-            for seq in scene.sequence_editor.sequences_all:
+            for seq in scene.sequence_editor.sequences:
                 if seq.channel >= channel:
                     channel = seq.channel + 1
             channel = min(channel, 128)
