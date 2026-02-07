@@ -45,7 +45,11 @@ class SUBTITLE_OT_download_model(Operator):
                     if msg_type == "status":
                         props.model_download_status = msg.get("text", "")
                     elif msg_type == "progress":
-                        props.model_download_progress = msg.get("value", 0.0)
+                        progress_value = msg.get("value", 0.0)
+                        props.model_download_progress = progress_value
+                        # Update Blender's built-in progress bar (bottom status bar)
+                        wm = context.window_manager
+                        wm.progress_update(int(progress_value * 100))
                     elif msg_type == "error":
                         props.model_download_status = f"Error: {msg.get('text', '')}"
                         self.report(
@@ -104,6 +108,10 @@ class SUBTITLE_OT_download_model(Operator):
         props.model_download_status = f"Preparing to download {self._model_name}..."
         props.model_download_progress = 0.0
 
+        # Start Blender's built-in progress bar (appears in bottom status bar)
+        wm = context.window_manager
+        wm.progress_begin(0, 100)
+
         # Start background thread for the heavy work
         self._thread = threading.Thread(
             target=self._download_worker, args=(self._model_name,)
@@ -122,13 +130,18 @@ class SUBTITLE_OT_download_model(Operator):
     def cancel(self, context):
         """
         Clean up when operator finishes or is cancelled.
-        Always remove the timer to prevent memory leaks.
+        Always remove the timer and end progress bar to prevent memory leaks.
         """
         if self._timer:
             wm = context.window_manager
             wm.event_timer_remove(self._timer)
             self._timer = None
             print("[Subtitle Editor] Modal operator timer removed")
+
+        # End Blender's built-in progress bar
+        wm = context.window_manager
+        wm.progress_end()
+        print("[Subtitle Editor] Progress bar ended")
 
     def _download_worker(self, model_name):
         """
