@@ -6,7 +6,8 @@ Now using Blender Addon Framework for auto-loading, hot-reload, and UV dependenc
 """
 
 import bpy
-from bpy.props import PointerProperty, CollectionProperty, IntProperty
+from bpy.props import PointerProperty, CollectionProperty, IntProperty, StringProperty
+from bpy.types import AddonPreferences
 
 # Framework imports
 from .config import __addon_name__
@@ -17,6 +18,35 @@ from .i18n.dictionary import dictionary
 
 # Property groups (must be imported for _addon_properties)
 from .props import SubtitleEditorProperties, TextStripItem
+
+
+# =============================================================================
+# Addon Preferences
+# =============================================================================
+
+
+class SubtitleEditorAddonPreferences(AddonPreferences):
+    """Addon preferences for Subtitle Editor"""
+
+    bl_idname = __addon_name__
+
+    hf_token: StringProperty(
+        name="Hugging Face Token",
+        description="Optional: Hugging Face authentication token for faster model downloads. Get yours at https://huggingface.co/settings/tokens",
+        default="",
+        subtype="PASSWORD",
+    )
+
+    def draw(self, context):
+        layout = self.layout
+
+        box = layout.box()
+        box.label(text="Authentication", icon="LOCKED")
+        box.prop(self, "hf_token")
+
+        box.label(text="Set a Hugging Face token for faster downloads", icon="INFO")
+        box.label(text="Get your token at: https://huggingface.co/settings/tokens")
+
 
 # =============================================================================
 # Blender Add-on Info
@@ -48,6 +78,11 @@ _addon_properties = {
     }
 }
 
+# List of classes to register manually (not auto-discovered)
+_manual_classes = [
+    SubtitleEditorAddonPreferences,
+]
+
 # =============================================================================
 # Registration
 # =============================================================================
@@ -55,6 +90,10 @@ _addon_properties = {
 
 def register():
     """Register the addon using framework's auto_load"""
+    # Register manual classes (preferences, etc.)
+    for cls in _manual_classes:
+        bpy.utils.register_class(cls)
+
     # Initialize and register auto-discovered classes
     auto_load.init()
     auto_load.register()
@@ -76,6 +115,10 @@ def unregister():
 
     # Unregister classes
     auto_load.unregister()
+
+    # Unregister manual classes (in reverse order)
+    for cls in reversed(_manual_classes):
+        bpy.utils.unregister_class(cls)
 
     # Remove properties
     remove_properties(_addon_properties)

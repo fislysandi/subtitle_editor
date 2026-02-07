@@ -143,6 +143,18 @@ class SUBTITLE_OT_download_model(Operator):
             print(f"[Subtitle Editor] Download thread started for {model_name}")
             print(f"[Subtitle Editor] Cache directory: {cache_dir}")
 
+            # Set Hugging Face token if available in addon preferences
+            preferences = bpy.context.preferences.addons.get("subtitle_editor")
+            if preferences and hasattr(preferences, "preferences"):
+                hf_token = preferences.preferences.hf_token
+                if hf_token:
+                    os.environ["HF_TOKEN"] = hf_token
+                    print("[Subtitle Editor] HF_TOKEN set from addon preferences")
+                else:
+                    print(
+                        "[Subtitle Editor] No HF_TOKEN set (optional, but recommended for faster downloads)"
+                    )
+
             # Update status via queue
             self._queue.put(
                 {"type": "status", "text": f"Checking if {model_name} exists..."}

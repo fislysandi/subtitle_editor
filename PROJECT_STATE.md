@@ -25,6 +25,7 @@
 - ⚙️ **Advanced settings**: beam size, max words per strip, font size, alignment
 - 🔧 **Dependency management** with install/verify functionality
 - 💾 **Model download** - Download Whisper models on demand
+- 🔐 **Hugging Face authentication** - Optional HF_TOKEN for faster downloads
 - 🔥 **Hot-reload** during development
 
 ## ✅ Completed Migration Tasks
@@ -303,6 +304,30 @@ cat PROJECT_STATE.md
 - **Upstream Repo:** https://github.com/tin2tin/Subtitle_Editor
 - **Faster Whisper:** https://github.com/SYSTRAN/faster-whisper
 - **Framework Docs:** See main repo README.md
+
+## 🔐 Hugging Face Token Configuration (Optional)
+
+To enable faster model downloads and avoid rate limits, you can set a Hugging Face authentication token:
+
+### Getting Your Token:
+1. Visit: https://huggingface.co/settings/tokens
+2. Create a new token (read-only is sufficient)
+3. Copy the token
+
+### Setting the Token in Blender:
+1. Open Blender
+2. Go to **Edit > Preferences > Add-ons**
+3. Find "Subtitle Editor" and expand it
+4. Click on the addon preferences
+5. Paste your token in the "Hugging Face Token" field
+6. The token will be used automatically for all model downloads
+
+### Benefits:
+- **Faster downloads** - Higher rate limits from Hugging Face
+- **No warnings** - Eliminates "unauthenticated requests" warnings
+- **Better reliability** - Less likely to hit rate limits during peak times
+
+**Note:** The token is optional. Downloads will work without it, but may be slower.
 
 ## 📚 Development Context Files
 
