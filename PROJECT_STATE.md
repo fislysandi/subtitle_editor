@@ -156,7 +156,7 @@ subtitle_editor/
 **SubtitleEditorProperties:**
 - `language` - Transcription language
 - `model` - Whisper model (19 options: tiny to turbo, multilingual & English-only)
-- `device` - Compute device (auto, cpu, cuda)
+- `device` - Compute device (auto, cpu, gpu)
 - `compute_type` - Computation precision (default, int8, float16, float32)
 - `beam_size` - Beam search size (1-10)
 - `max_words_per_strip` - Max words before creating new strip (0-20, 0=unlimited)

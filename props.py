@@ -129,11 +129,15 @@ class SubtitleEditorProperties(PropertyGroup):
 
     device: EnumProperty(
         name="Device",
-        description="Computation device",
+        description="Computation device for transcription",
         items=[
-            ("auto", "Auto", "Automatically select"),
-            ("cpu", "CPU", "CPU only"),
-            ("cuda", "CUDA", "NVIDIA GPU"),
+            ("auto", "Auto", "Automatically select best device"),
+            ("cpu", "CPU", "CPU only - works on all systems"),
+            (
+                "cuda",
+                "GPU",
+                "Use GPU (CUDA, ROCm, or Metal depending on PyTorch install)",
+            ),
         ],
         default="auto",
     )
