@@ -9,8 +9,13 @@ Downloads Whisper models with:
 
 import bpy
 import threading
+from typing import Optional
 from bpy.types import Operator
-from ..core.download_manager import DownloadManager, DownloadStatus, create_download_manager
+from ..core.download_manager import (
+    DownloadManager,
+    DownloadStatus,
+    create_download_manager,
+)
 from ..utils import file_utils
 
 
@@ -23,9 +28,9 @@ class SUBTITLE_OT_download_model(Operator):
     bl_options = {"REGISTER"}
 
     # Instance variables (not class variables) for proper isolation
-    _timer: bpy.types.Timer = None
-    _download_manager: DownloadManager = None
-    _thread: threading.Thread = None
+    _timer: Optional[bpy.types.Timer] = None
+    _download_manager: Optional[DownloadManager] = None
+    _thread: Optional[threading.Thread] = None
     _model_name: str = ""
     _finished: bool = False
 
@@ -48,7 +53,9 @@ class SUBTITLE_OT_download_model(Operator):
         try:
             from huggingface_hub import snapshot_download
         except ImportError:
-            self.report({"ERROR"}, "huggingface_hub not installed. Install dependencies first.")
+            self.report(
+                {"ERROR"}, "huggingface_hub not installed. Install dependencies first."
+            )
             return {"CANCELLED"}
 
         # Create download manager
@@ -109,7 +116,8 @@ class SUBTITLE_OT_download_model(Operator):
         if event.type == "TIMER":
             # Check for external cancellation (via cancel button)
             if not props.is_downloading_model and not self._finished:
-                self._download_manager.cancel()
+                if self._download_manager:
+                    self._download_manager.cancel()
 
             # Poll progress from download manager
             if self._download_manager:
@@ -118,6 +126,9 @@ class SUBTITLE_OT_download_model(Operator):
                 # Update UI properties
                 props.model_download_progress = progress.percentage
                 props.model_download_status = progress.message
+
+                # Update Blender's native status bar
+                context.workspace.status_text_set(progress.message)
 
                 # Update Blender's native progress bar (0-100)
                 context.window_manager.progress_update(int(progress.percentage * 100))
@@ -149,10 +160,11 @@ class SUBTITLE_OT_download_model(Operator):
         # Return PASS_THROUGH to keep Blender responsive
         return {"PASS_THROUGH"}
 
-    def _download_worker(self, model_name: str, token: str = None):
+    def _download_worker(self, model_name: str, token: Optional[str] = None):
         """Background thread that performs the download."""
         try:
-            self._download_manager.download(model_name, token=token)
+            if self._download_manager:
+                self._download_manager.download(model_name, token=token)
         except Exception as e:
             # Error is handled in download_manager
             print(f"[Subtitle Editor] Download error: {e}")
@@ -166,6 +178,8 @@ class SUBTITLE_OT_download_model(Operator):
     def _cleanup(self, context):
         """Clean up timer and state."""
         props = context.scene.subtitle_editor
+
+        context.workspace.status_text_set(None)
 
         # Remove timer
         if self._timer:
@@ -196,14 +210,14 @@ class SUBTITLE_OT_cancel_download(Operator):
     def execute(self, context):
         """Signal cancellation by setting is_downloading_model to False."""
         props = context.scene.subtitle_editor
-        
+
         if props.is_downloading_model:
             props.is_downloading_model = False
             props.model_download_status = "Cancelling..."
             self.report({"INFO"}, "Cancelling download...")
         else:
             self.report({"WARNING"}, "No download in progress")
-        
+
         return {"FINISHED"}
 
 
