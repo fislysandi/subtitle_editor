@@ -8,6 +8,41 @@ from bpy.types import Operator
 from ..utils import sequence_utils
 
 
+def _get_cursor_frame(context, scene) -> int:
+    space = context.space_data
+    if space and getattr(space, "type", None) == "SEQUENCE_EDITOR":
+        cursor_location = getattr(space, "cursor_location", None)
+        if cursor_location is not None:
+            return int(round(cursor_location[0]))
+
+    if scene.sequence_editor:
+        cursor2d = getattr(scene.sequence_editor, "cursor2d", None)
+        if cursor2d is not None:
+            return int(round(cursor2d[0]))
+
+    return scene.frame_current
+
+
+def _get_default_duration(scene) -> int:
+    fps_base = scene.render.fps_base or 1.0
+    duration = int(round(scene.render.fps / fps_base))
+    return max(1, duration)
+
+
+def _get_unique_strip_name(scene, base_name: str) -> str:
+    if not scene.sequence_editor:
+        return base_name
+
+    existing_names = {strip.name for strip in scene.sequence_editor.strips}
+    if base_name not in existing_names:
+        return base_name
+
+    index = 1
+    while f"{base_name}_{index}" in existing_names:
+        index += 1
+    return f"{base_name}_{index}"
+
+
 class SUBTITLE_OT_refresh_list(Operator):
     """Refresh the list of text strips"""
 
@@ -53,6 +88,102 @@ class SUBTITLE_OT_select_strip(Operator):
         return {"FINISHED"}
 
 
+class SUBTITLE_OT_add_strip_at_cursor(Operator):
+    """Add a subtitle strip at the 2D cursor position"""
+
+    bl_idname = "subtitle.add_strip_at_cursor"
+    bl_label = "Add Subtitle at Cursor"
+    bl_description = "Add a subtitle strip at the 2D cursor position"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        scene = context.scene
+        if not scene:
+            self.report({"WARNING"}, "No active scene")
+            return {"CANCELLED"}
+
+        current_frame = scene.frame_current
+
+        if not scene.sequence_editor:
+            scene.sequence_editor_create()
+
+        props = scene.subtitle_editor
+        frame_start = _get_cursor_frame(context, scene)
+        frame_start = max(scene.frame_start, frame_start)
+        frame_end = frame_start + _get_default_duration(scene)
+
+        name = _get_unique_strip_name(scene, f"Subtitle_{frame_start}")
+        strip = sequence_utils.create_text_strip(
+            scene,
+            name=name,
+            text="",
+            frame_start=frame_start,
+            frame_end=frame_end,
+            channel=props.subtitle_channel,
+        )
+
+        if not strip:
+            self.report({"ERROR"}, "Failed to create subtitle strip")
+            return {"CANCELLED"}
+
+        try:
+            strip.font_size = props.font_size
+        except AttributeError:
+            pass
+
+        try:
+            strip.color = (
+                props.text_color[0],
+                props.text_color[1],
+                props.text_color[2],
+                1.0,
+            )
+        except AttributeError:
+            pass
+
+        try:
+            strip.use_shadow = True
+            strip.shadow_color = (
+                props.shadow_color[0],
+                props.shadow_color[1],
+                props.shadow_color[2],
+                1.0,
+            )
+        except AttributeError:
+            pass
+
+        try:
+            strip.wrap_width = props.wrap_width
+        except AttributeError:
+            pass
+
+        try:
+            if props.v_align == "TOP":
+                strip.align_y = "TOP"
+            elif props.v_align == "CENTER":
+                strip.align_y = "CENTER"
+            elif props.v_align == "BOTTOM":
+                strip.align_y = "BOTTOM"
+        except AttributeError:
+            pass
+
+        for s in scene.sequence_editor.strips:
+            s.select = False
+        strip.select = True
+        if scene.sequence_editor:
+            scene.sequence_editor.active_strip = strip
+
+        sequence_utils.refresh_list(context)
+        for index, item in enumerate(scene.text_strip_items):
+            if item.name == strip.name:
+                scene.text_strip_items_index = index
+                break
+
+        scene.subtitle_editor.current_text = strip.text
+        scene.frame_current = current_frame
+        return {"FINISHED"}
+
+
 class SUBTITLE_OT_update_text(Operator):
     """Update subtitle text"""
 
@@ -82,6 +213,7 @@ class SUBTITLE_OT_update_text(Operator):
                     strip.text = new_text
                     break
 
+
 class SUBTITLE_OT_apply_style(Operator):
     """Apply current style settings to selected subtitle strips"""
 
@@ -93,20 +225,20 @@ class SUBTITLE_OT_apply_style(Operator):
     def execute(self, context):
         scene = context.scene
         props = scene.subtitle_editor
-        
+
         # Get selected sequences
         selected = sequence_utils.get_selected_strips(context)
         if not selected:
             self.report({"WARNING"}, "No strips selected")
             return {"CANCELLED"}
-            
+
         count = 0
         for strip in selected:
             if strip.type == "TEXT":
                 # Apply style
                 strip.font_size = props.font_size
-                strip.color = props.text_color + (1.0,) # RGB + Alpha
-                # Shadow isn't a direct property on TextSequence in simple API, 
+                strip.color = props.text_color + (1.0,)  # RGB + Alpha
+                # Shadow isn't a direct property on TextSequence in simple API,
                 # but let's check if we can set it.
                 # Blender VSE Text strips use 'use_shadow' and 'shadow_color' if available?
                 # Actually standard VSE Text Strip has:
@@ -114,29 +246,39 @@ class SUBTITLE_OT_apply_style(Operator):
                 # - color
                 # - use_shadow (bool)
                 # - shadow_color (rgba)
-                
+
                 # Let's check what properties are available on standard text strip using dir() if needed,
                 # but standard API usually supports these.
-                
+
                 # For safety let's use try/except block for properties that might vary by version
                 try:
                     strip.font_size = props.font_size
                 except AttributeError:
                     pass
-                    
+
                 try:
                     # props.text_color is FloatVector(size=3)
                     # strip.color is FloatVector(size=4) usually
-                    strip.color = (props.text_color[0], props.text_color[1], props.text_color[2], 1.0)
+                    strip.color = (
+                        props.text_color[0],
+                        props.text_color[1],
+                        props.text_color[2],
+                        1.0,
+                    )
                 except AttributeError:
                     pass
-                
+
                 try:
                     strip.use_shadow = True
-                    strip.shadow_color = (props.shadow_color[0], props.shadow_color[1], props.shadow_color[2], 1.0)
+                    strip.shadow_color = (
+                        props.shadow_color[0],
+                        props.shadow_color[1],
+                        props.shadow_color[2],
+                        1.0,
+                    )
                 except AttributeError:
                     pass
-                
+
                 # Also alignment
                 try:
                     if props.v_align == "TOP":
@@ -149,7 +291,7 @@ class SUBTITLE_OT_apply_style(Operator):
                     pass
 
                 count += 1
-        
+
         self.report({"INFO"}, f"Applied style to {count} strips")
         return {"FINISHED"}
 
@@ -164,39 +306,39 @@ class SUBTITLE_OT_insert_line_breaks(Operator):
 
     def execute(self, context):
         import textwrap
-        
+
         scene = context.scene
         props = scene.subtitle_editor
         max_chars = props.max_chars_per_line
-        
+
         # Get selected sequences
         selected = sequence_utils.get_selected_strips(context)
         if not selected:
             self.report({"WARNING"}, "No strips selected")
             return {"CANCELLED"}
-            
+
         count = 0
         for strip in selected:
             if strip.type == "TEXT":
                 # Get current text
                 current_text = strip.text
-                
+
                 # Unwrap first to remove existing line breaks if any (optional, but good for re-flowing)
-                # But simple assumption: input is just text. 
+                # But simple assumption: input is just text.
                 # Let's replace single newlines with spaces to allow re-flow, but keep double newlines?
                 # For simple subtitles, usually just one block.
                 # Let's just wrap existing text.
-                
-                # Logic: Split by newlines first to preserve intentional paragraphs? 
+
+                # Logic: Split by newlines first to preserve intentional paragraphs?
                 # Standard approach: treat as one block for simple wrapping.
-                
+
                 wrapped_lines = textwrap.wrap(current_text, width=max_chars)
                 new_text = "\n".join(wrapped_lines)
-                
+
                 if new_text != current_text:
                     strip.text = new_text
                     count += 1
-        
+
         self.report({"INFO"}, f"Updated {count} strips")
         return {"FINISHED"}
 
@@ -204,6 +346,7 @@ class SUBTITLE_OT_insert_line_breaks(Operator):
 classes = [
     SUBTITLE_OT_refresh_list,
     SUBTITLE_OT_select_strip,
+    SUBTITLE_OT_add_strip_at_cursor,
     SUBTITLE_OT_update_text,
     SUBTITLE_OT_apply_style,
     SUBTITLE_OT_insert_line_breaks,

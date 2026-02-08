@@ -19,6 +19,14 @@ def get_selected_strip(context) -> Optional[Any]:
     return None
 
 
+def get_selected_strips(context) -> List[Any]:
+    """Get all selected strips in the sequencer"""
+    if not context.scene.sequence_editor:
+        return []
+
+    return [s for s in context.scene.sequence_editor.strips if s.select]
+
+
 def get_strip_filepath(strip) -> Optional[str]:
     """Get file path from a movie or sound strip"""
     filepath = None
@@ -26,12 +34,13 @@ def get_strip_filepath(strip) -> Optional[str]:
         filepath = strip.filepath
     elif strip.type == "SOUND":
         filepath = strip.sound.filepath if strip.sound else None
-    
+
     if filepath:
         # Convert to absolute path (handles // prefix)
         abs_path = bpy.path.abspath(filepath)
         # Normalize path (handles .. and redundant separators)
         import os
+
         return os.path.abspath(abs_path)
     return None
 
@@ -120,7 +129,7 @@ def on_text_strip_index_update(self, context):
 
     index = context.scene.text_strip_items_index
     items = context.scene.text_strip_items
-    
+
     if 0 <= index < len(items):
         item = items[index]
         # Jump cursor to start of strip
@@ -128,14 +137,14 @@ def on_text_strip_index_update(self, context):
 
         # Sync editing text
         context.scene.subtitle_editor.current_text = item.text
-        
+
         # Optional: Select the actual strip in sequencer
         # This keeps the UI list and Sequencer selection in sync
         if context.scene.sequence_editor:
             # Deselect all
             for s in context.scene.sequence_editor.strips:
                 s.select = False
-            
+
             # Select the matching strip
             for s in context.scene.sequence_editor.strips:
                 if s.name == item.name:

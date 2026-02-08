@@ -11,10 +11,10 @@ class SEQUENCER_PT_panel(Panel):
     """Main Subtitle Editor Panel"""
 
     bl_idname = "SEQUENCER_PT_panel"
-    bl_label = "Subtitle Editor"
+    bl_label = "Subtitle Studio"
     bl_space_type = "SEQUENCE_EDITOR"
     bl_region_type = "UI"
-    bl_category = "Subtitle Editor"
+    bl_category = "Subtitle Studio"
 
     def draw(self, context):
         layout = self.layout
@@ -45,7 +45,10 @@ class SEQUENCER_PT_panel(Panel):
         row.separator()
 
         # Navigation
-        row.operator("subtitle.select_strip", text="", icon="TRIA_UP")
+        row.operator("subtitle.add_strip_at_cursor", text="", icon="ADD")
+        row.separator()
+        select_op = row.operator("subtitle.select_strip", text="", icon="TRIA_UP")
+        select_op.index = scene.text_strip_items_index
         row.separator()
 
         # Update
@@ -77,11 +80,13 @@ class SEQUENCER_PT_panel(Panel):
             row = box.row(align=True)
             row.prop(scene.subtitle_editor, "text_color")
             row.prop(scene.subtitle_editor, "shadow_color")
-            
+
             # Line breaks box
             box = col.box()
             box.prop(scene.subtitle_editor, "max_chars_per_line")
-            box.operator("subtitle.insert_line_breaks", text="Insert Line Breaks", icon="TEXT")
+            box.operator(
+                "subtitle.insert_line_breaks", text="Insert Line Breaks", icon="TEXT"
+            )
         else:
             box = layout.box()
             box.label(text="Select a subtitle from the list to edit")
@@ -94,7 +99,7 @@ class SEQUENCER_PT_whisper_panel(Panel):
     bl_idname = "SEQUENCER_PT_whisper"
     bl_space_type = "SEQUENCE_EDITOR"
     bl_region_type = "UI"
-    bl_category = "Subtitle Editor"
+    bl_category = "Subtitle Studio"
 
     @classmethod
     def poll(cls, context):
@@ -215,7 +220,11 @@ class SEQUENCER_PT_whisper_panel(Panel):
                 col_dl = box.column(align=True)
                 col_dl.label(text="Model Ready", icon="CHECKMARK")
                 # Optional: Redownload button (smaller/different icon)
-                col_dl.operator("subtitle.download_model", text="Redownload Model", icon="FILE_REFRESH")
+                col_dl.operator(
+                    "subtitle.download_model",
+                    text="Redownload Model",
+                    icon="FILE_REFRESH",
+                )
             else:
                 # Show download button
                 row.operator("subtitle.download_model", text="Download", icon="IMPORT")
@@ -240,11 +249,11 @@ class SEQUENCER_PT_whisper_panel(Panel):
 
         # Show Advanced Options toggle
         box.prop(props, "show_advanced")
-        
+
         if props.show_advanced:
             adv_box = box.box()
             adv_box.label(text="Advanced Settings", icon="PREFERENCES")
-            
+
             # VAD Advanced Settings
             if props.vad_filter:
                 vad_col = adv_box.column()

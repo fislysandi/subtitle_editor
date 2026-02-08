@@ -110,7 +110,9 @@ LANGUAGES = {
 }
 
 # Create enum items for Blender
-LANGUAGE_ITEMS = [(code, name, f"Transcribe in {name}") for code, name in LANGUAGES.items()]
+LANGUAGE_ITEMS = [
+    (code, name, f"Transcribe in {name}") for code, name in LANGUAGES.items()
+]
 
 # =============================================================================
 # Whisper Models
@@ -144,7 +146,9 @@ MODELS = {
     },
 }
 
-MODEL_ITEMS = [(key, info["name"], f"{info['description']}") for key, info in MODELS.items()]
+MODEL_ITEMS = [
+    (key, info["name"], f"{info['description']}") for key, info in MODELS.items()
+]
 
 # =============================================================================
 # Subtitle Formats
@@ -188,7 +192,7 @@ IMPORT_EXPORT_FORMATS = [
 # UI Constants
 # =============================================================================
 
-PANEL_CATEGORY = "Subtitle Editor"
+PANEL_CATEGORY = "Subtitle Studio"
 DEFAULT_FONT_SIZE = 24
 DEFAULT_FONT_PATH = None  # Use Blender default
 

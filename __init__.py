@@ -1,12 +1,18 @@
 """
-Subtitle Editor - Blender Addon Framework Edition
+Subtitle Studio - Blender Addon Framework Edition
 
 AI-powered subtitle transcription and editing for Blender Video Sequence Editor.
 Now using Blender Addon Framework for auto-loading, hot-reload, and UV dependency management.
 """
 
 import bpy
-from bpy.props import PointerProperty, CollectionProperty, IntProperty, StringProperty, BoolProperty
+from bpy.props import (
+    PointerProperty,
+    CollectionProperty,
+    IntProperty,
+    StringProperty,
+    BoolProperty,
+)
 from bpy.types import AddonPreferences
 
 # Framework imports
@@ -63,12 +69,12 @@ class SubtitleEditorAddonPreferences(AddonPreferences):
 # =============================================================================
 
 bl_info = {
-    "name": "Subtitle Editor",
-    "author": "Your Name",
+    "name": "Subtitle Studio",
+    "author": "Fislysandi (original by tin2tin)",
     "version": (1, 0, 0),
     "blender": (4, 5, 0),
-    "location": "Video Sequence Editor > Sidebar > Subtitle Editor",
-    "description": "AI-powered subtitle transcription and editing for Blender VSE",
+    "location": "Video Sequence Editor > Sidebar > Subtitle Studio",
+    "description": "AI-powered subtitle transcription and editing for Blender VSE. Based on https://github.com/tin2tin/Subtitle_Editor",
     "warning": "",
     "doc_url": "",
     "category": "Sequencer",
@@ -87,8 +93,7 @@ _addon_properties = {
         "subtitle_editor": PointerProperty(type=SubtitleEditorProperties),
         "text_strip_items": CollectionProperty(type=TextStripItem),
         "text_strip_items_index": IntProperty(
-            default=-1,
-            update=sequence_utils.on_text_strip_index_update
+            default=-1, update=sequence_utils.on_text_strip_index_update
         ),
     }
 }

@@ -1,10 +1,10 @@
 """
-Translation dictionary for Subtitle Editor
+Translation dictionary for Subtitle Studio
 """
 
 dictionary = {
     "en_US": {
-        ("*", "Subtitle Editor"): "Subtitle Editor",
+        ("*", "Subtitle Studio"): "Subtitle Studio",
         ("*", "Transcribe"): "Transcribe",
         ("*", "Import Subtitles"): "Import Subtitles",
         ("*", "Export Subtitles"): "Export Subtitles",
@@ -21,7 +21,7 @@ dictionary = {
         ("*", "Subtitle Strips"): "Subtitle Strips",
     },
     "zh_CN": {
-        ("*", "Subtitle Editor"): "字幕编辑器",
+        ("*", "Subtitle Studio"): "字幕工作室",
         ("*", "Transcribe"): "转录",
         ("*", "Import Subtitles"): "导入字幕",
         ("*", "Export Subtitles"): "导出字幕",
