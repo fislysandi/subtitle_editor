@@ -193,10 +193,10 @@ subtitle_editor/
 ## 🐛 Known Issues / TODO
 
 ### Critical (Fix Before Release)
-- [ ] **Thread Safety** - Property updates from background thread (ops_transcribe.py:69-70)
+- [x] **Thread Safety** - Property updates from background thread (ops_transcribe.py:69-70)
   - Properties updated directly from thread can cause crashes
   - Fix: Use `bpy.app.timers` for all property updates from threads
-- [ ] **Bare Except Clauses** - Replace with `except Exception:` (props.py:285, ops_dependencies.py:105)
+- [x] **Bare Except Clauses** - Replace with `except Exception:` (props.py:285, ops_dependencies.py:105)
 
 ### Medium Priority
 - [ ] Implement batch styling (copy style to selected)
@@ -229,7 +229,11 @@ cat PROJECT_STATE.md
 
 ## 📝 Recent Changes
 
-### 1. Restored Non-Blocking Model Download with Progress UI (Latest)
+### 1. Critical Stability Fixes (Latest)
+- **Thread Safety**: Refactored `ops_transcribe.py` to decouple background threads from Blender properties. Config is now passed as a dictionary, and all UI updates use `bpy.app.timers`.
+- **Error Handling**: Replaced bare `except:` clauses with `except Exception:` in `props.py` and `ops_dependencies.py` to prevent catching system signals.
+
+### 2. Restored Non-Blocking Model Download with Progress UI
 **Git History Preserved:** This is a new implementation based on commit 8942594, not a revert
 
 **Changes:**

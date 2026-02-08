@@ -229,6 +229,9 @@ class SUBTITLE_OT_check_gpu(Operator):
         except ImportError:
             props.gpu_detected = False
             self.report({"WARNING"}, "PyTorch not installed - cannot check GPU")
+        except Exception:
+            props.gpu_detected = False
+            self.report({"WARNING"}, "An unexpected error occurred while checking GPU.")
 
         return {"FINISHED"}
 
