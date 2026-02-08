@@ -21,13 +21,15 @@ def get_selected_strip(context) -> Optional[Any]:
 
 def get_strip_filepath(strip) -> Optional[str]:
     """Get file path from a movie or sound strip"""
+    filepath = None
     if strip.type == "MOVIE":
-        return strip.filepath
+        filepath = strip.filepath
     elif strip.type == "SOUND":
-        return strip.sound.filepath if strip.sound else None
-    elif strip.type == "SCENE":
-        # Scene strips don't have files
-        return None
+        filepath = strip.sound.filepath if strip.sound else None
+    
+    if filepath:
+        # Convert to absolute path (handles // prefix)
+        return bpy.path.abspath(filepath)
     return None
 
 

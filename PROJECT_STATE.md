@@ -206,6 +206,7 @@ subtitle_editor/
 - [x] **Blender 5.0 Compatibility**: Replaced deprecated `sequence_editor.sequences` with `sequence_editor.strips`.
 - [x] **Transcribe Channel Fix**: `Transcribe` operator now correctly uses the channel specified in the UI (`subtitle_channel`).
 - [x] **Thread Safety**: Fixed critical issue where accessing `strip` properties from background threads caused silent failures. Filepaths are now extracted on main thread.
+- [x] **Relative Path Fix**: Added `bpy.path.abspath()` to ensure relative file paths (e.g. `//video.mp4`) work correctly with external tools like ffmpeg.
 - [ ] Test all import/export formats
 - [ ] Add file browser panels for import/export
 - [ ] Optimize transcription performance
