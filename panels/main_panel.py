@@ -122,7 +122,12 @@ class SEQUENCER_PT_whisper_panel(Panel):
         icon = "CHECKBOX_HLT" if all_deps_installed else "CHECKBOX_DEHLT"
         row.label(text="Dependencies:", icon=icon)
 
+        # UV Option (Speed switch)
+        row = box.row()
+        row.prop(props, "use_uv", toggle=True)
+
         # Install/Verify button
+        row = box.row()
         row.operator(
             "subtitle.install_dependencies", text="Install/Verify Dependencies"
         )

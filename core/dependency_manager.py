@@ -81,12 +81,13 @@ class DependencyManager:
                 return None
 
     @staticmethod
-    def get_install_command(packages, constraint=None, extra_args=None):
+    def get_install_command(packages, constraint=None, extra_args=None, use_uv=True):
         """
         Get command to install packages using uv (preferred) or pip (fallback).
         Returns list of strings [executable, args...]
         """
-        uv_path = DependencyManager.ensure_uv()
+        # Only try to ensure uv if use_uv is True
+        uv_path = DependencyManager.ensure_uv() if use_uv else None
         cmd = []
         
         if uv_path:
@@ -94,7 +95,10 @@ class DependencyManager:
             # uv pip install --python <python_path> <packages>
             cmd = [uv_path, "pip", "install", "--python", sys.executable]
         else:
-            print("[Subtitle Editor] uv not found, falling back to pip")
+            if not use_uv:
+                print("[Subtitle Editor] UV disabled by user settings, using pip")
+            else:
+                print("[Subtitle Editor] uv not found, falling back to pip")
             cmd = [sys.executable, "-m", "pip", "install"]
         
         # Add constraint first if provided

@@ -276,6 +276,12 @@ class SubtitleEditorProperties(PropertyGroup):
         default=False,
     )
 
+    use_uv: BoolProperty(
+        name="Use UV for Downloads",
+        description="Use 'uv' package manager for faster downloads (disable if you have connection issues)",
+        default=True,
+    )
+
     # Progress tracking
     is_transcribing: BoolProperty(
         name="Is Transcribing", description="Transcription in progress", default=False

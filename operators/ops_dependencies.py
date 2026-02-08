@@ -256,7 +256,8 @@ class SUBTITLE_OT_install_dependencies(Operator):
             # We pass numpy<2.0 as constraint
             cmd = DependencyManager.get_install_command(
                 packages, 
-                constraint="numpy<2.0"
+                constraint="numpy<2.0",
+                use_uv=props.use_uv
             )
 
             print(f"Running command: {' '.join(cmd)}")
@@ -396,7 +397,8 @@ class SUBTITLE_OT_install_pytorch(Operator):
             cmd = DependencyManager.get_install_command(
                 packages, 
                 constraint="numpy<2.0",
-                extra_args=extra_args
+                extra_args=extra_args,
+                use_uv=props.use_uv
             )
 
             print(f"Running command: {' '.join(cmd)}")
