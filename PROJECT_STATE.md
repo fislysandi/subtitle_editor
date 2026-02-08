@@ -264,7 +264,7 @@ cat PROJECT_STATE.md
   - 🚀 **Extremely Fast**: Multi-threaded downloads significantly fast than standard pip.
   - 🎯 **Accurate Pathing**: Explicitly targets Blender's Python executable using `--python` flag, solving "package not found" issues.
   - 🔄 **Auto-Bootstrap**: Automatically downloads `uv` if not present.
-  - ⚙️ **Optional**: Added "Use UV" checkbox in settings for users who prefer standard pip.
+  - ⚙️ **Optional**: "Use UV" checkbox available in **Addon Preferences** (Edit > Preferences > Add-ons).
 - **Files Changed**: Created `core/dependency_manager.py`, updated `operators/ops_dependencies.py`.
 
 ### 2. Restored Non-Blocking Model Download with Progress UI

@@ -6,7 +6,7 @@ Now using Blender Addon Framework for auto-loading, hot-reload, and UV dependenc
 """
 
 import bpy
-from bpy.props import PointerProperty, CollectionProperty, IntProperty, StringProperty
+from bpy.props import PointerProperty, CollectionProperty, IntProperty, StringProperty, BoolProperty
 from bpy.types import AddonPreferences
 
 # Framework imports
@@ -37,8 +37,18 @@ class SubtitleEditorAddonPreferences(AddonPreferences):
         subtype="PASSWORD",
     )
 
+    use_uv: BoolProperty(
+        name="Use UV for Downloads",
+        description="Use 'uv' package manager for faster downloads (disable if you have connection issues)",
+        default=True,
+    )
+
     def draw(self, context):
         layout = self.layout
+
+        box = layout.box()
+        box.label(text="Dependency Management", icon="PACKAGE")
+        box.prop(self, "use_uv")
 
         box = layout.box()
         box.label(text="Authentication", icon="LOCKED")

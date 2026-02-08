@@ -9,6 +9,7 @@ import subprocess
 import sys
 from bpy.types import Operator
 from ..core.dependency_manager import DependencyManager
+from ..config import __addon_name__
 
 
 class SUBTITLE_OT_check_dependencies(Operator):
@@ -249,6 +250,9 @@ class SUBTITLE_OT_install_dependencies(Operator):
                 "onnxruntime>=1.24.1",
             ]
 
+            # Retrieve use_uv from Addon Preferences
+            addon_prefs = context.preferences.addons[__addon_name__].preferences
+            
             # Install all packages in a single command using UV dependency manager
             props.deps_install_status = "Bootstrapping UV & resolving dependencies..."
             
@@ -257,7 +261,7 @@ class SUBTITLE_OT_install_dependencies(Operator):
             cmd = DependencyManager.get_install_command(
                 packages, 
                 constraint="numpy<2.0",
-                use_uv=props.use_uv
+                use_uv=addon_prefs.use_uv
             )
 
             print(f"Running command: {' '.join(cmd)}")
@@ -392,13 +396,16 @@ class SUBTITLE_OT_install_pytorch(Operator):
             if index_url:
                 extra_args.extend(["--index-url", index_url])
 
+            # Retrieve use_uv from Addon Preferences
+            addon_prefs = context.preferences.addons[__addon_name__].preferences
+
             # IMPORTANT: numpy<2.0 is required for compatibility with aud module
             # Use DependencyManager to get uv/pip command
             cmd = DependencyManager.get_install_command(
                 packages, 
                 constraint="numpy<2.0",
                 extra_args=extra_args,
-                use_uv=props.use_uv
+                use_uv=addon_prefs.use_uv
             )
 
             print(f"Running command: {' '.join(cmd)}")
