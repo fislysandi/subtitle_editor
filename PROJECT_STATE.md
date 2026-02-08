@@ -373,7 +373,7 @@ cat PROJECT_STATE.md
 2. **Understand structure** - Files are in `panels/`, `operators/`, `core/`, etc.
 3. **Framework rules** - Uses auto_load, no manual registration needed
 4. **Test frequently** - Use `uv run test subtitle_editor` for hot-reload
-5. **Load context** - Use `rg` on `~/.config/opencode/context/project/blender-subtitle-editor/` (no glob) and point the agent to this path before executing work.
+5. **Load context** - Use `rg` on `~/.config/opencode/context/project/blender-subtitle-editor/` and only `rg`; globbing or other scanning methods are prohibited. Point the agent to this path before executing work.
 
 **What can be modified:**
 - ✅ Operators in `operators/`
@@ -478,7 +478,7 @@ To enable faster model downloads and avoid rate limits, you can set a Hugging Fa
 
 ## 📚 Development Context Files
 
-Located under `~/.config/opencode/context/project/blender-subtitle-editor/` for agents. Use ripgrep (`rg`) to discover or search these files; do not rely on glob expansion. Example commands:
+Located under `~/.config/opencode/context/project/blender-subtitle-editor/` for agents. **Do not use glob** (for example, `glob` or `context scout` glob heuristics) to discover files—always use ripgrep (`rg`). Example commands:
 
 ```bash
 rg --files ~/.config/opencode/context/project/blender-subtitle-editor/             # list context files
