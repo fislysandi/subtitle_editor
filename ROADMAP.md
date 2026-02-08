@@ -28,7 +28,28 @@
 
 ---
 
-## Milestone 1 — Core Subtitle Strip Engine (VSE Correctness)
+## Milestone 1 — UI/Workflow Polish
+**Outcome:** Subtitle Studio feels like a real Blender tool end-to-end.
+
+- [ ] Panel layout cleanup (VSE sidebar / add-on prefs)
+- [ ] Clear “happy path” workflow:
+  - Load media
+  - Import/generate subtitles
+  - Adjust
+  - Export
+- [ ] Undo/redo correctness (operators structured properly)
+- [ ] Better selection and editing tools:
+  - edit subtitle text in UI list
+  - jump timeline to cue
+  - adjust in/out with buttons
+- [ ] Presets for styling (subtitle theme presets)
+
+**Acceptance criteria**
+- A new user can install and create subtitles in <5 minutes with minimal confusion.
+
+---
+
+## Milestone 2 — Core Subtitle Strip Engine (VSE Correctness)
 **Outcome:** Subtitles place correctly in time and track/channel, every time.
 
 - [ ] Implement/verify timestamp→frame conversion:
@@ -51,7 +72,7 @@
 
 ---
 
-## Milestone 2 — Import/Export Reliability
+## Milestone 3 — Import/Export Reliability
 **Outcome:** Subtitle Studio is dependable for real workflows.
 
 - [ ] Import SRT reliably (encoding, multi-line cues, edge cases)
@@ -68,7 +89,7 @@
 
 ---
 
-## Milestone 3 — Non-Blocking Downloads + Status Bar Progress (UX)
+## Milestone 4 — Non-Blocking Downloads + Status Bar Progress (UX)
 **Outcome:** Downloads never freeze Blender; progress appears like render/bake.
 
 - [ ] Download manager (pure python) supports progress callback:
@@ -87,27 +108,6 @@
 
 **Acceptance criteria**
 - Downloading a large file shows smooth status-bar progress and UI remains responsive.
-
----
-
-## Milestone 4 — UI/Workflow Polish
-**Outcome:** Feels like a real Blender tool.
-
-- [ ] Panel layout cleanup (VSE sidebar / add-on prefs)
-- [ ] Clear “happy path” workflow:
-  - Load media
-  - Import/generate subtitles
-  - Adjust
-  - Export
-- [ ] Undo/redo correctness (operators structured properly)
-- [ ] Better selection and editing tools:
-  - edit subtitle text in UI list
-  - jump timeline to cue
-  - adjust in/out with buttons
-- [ ] Presets for styling (subtitle theme presets)
-
-**Acceptance criteria**
-- A new user can install and create subtitles in <5 minutes with minimal confusion.
 
 ---
 
@@ -154,7 +154,6 @@
 ---
 
 ## Immediate Next Tasks (Pick 3)
-- [ ] (P0) Lock down frame math + channel placement (Milestone 1)
-- [ ] (P1) Non-blocking download operator + status-bar progress (Milestone 3)
-- [ ] (P1) Rename + README polish to Subtitle Studio (Milestone 0)
-
+- [ ] (P0) Polish panel layout + editing workflow (Milestone 1)
+- [ ] (P0) Lock down frame math + channel placement (Milestone 2)
+- [ ] (P1) Non-blocking download operator + status-bar progress (Milestone 4)
