@@ -267,6 +267,13 @@ cat PROJECT_STATE.md
   - ⚙️ **Optional**: "Use UV" checkbox available in **Addon Preferences** (Edit > Preferences > Add-ons).
 - **Files Changed**: Created `core/dependency_manager.py`, updated `operators/ops_dependencies.py`.
 
+### 5. Robust Model Download (2026-02-08)
+- **Fixes**:
+  - 🛡️ **Crash Prevention**: Resolved `[Errno 39]` directory errors by handling filesystem locks gracefully.
+  - 📊 **Better Progress**: Added real-time download speed (MB/s) and file-level tracking to the progress bar.
+  - 🧠 **Smart Caching**: prevents redownloading by verifying file sizes (ignoring empty/corrupt files).
+- **Files Changed**: `core/download_manager.py`, `core/transcriber.py`.
+
 ### 2. Restored Non-Blocking Model Download with Progress UI
 **Git History Preserved:** This is a new implementation based on commit 8942594, not a revert
 

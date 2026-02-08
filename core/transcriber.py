@@ -73,8 +73,12 @@ class TranscriptionManager:
                 
                 # Check if model directory exists
                 if os.path.exists(local_model_path):
-                    has_bin = os.path.exists(os.path.join(local_model_path, "model.bin"))
-                    has_config = os.path.exists(os.path.join(local_model_path, "config.json"))
+                    bin_path = os.path.join(local_model_path, "model.bin")
+                    config_path = os.path.join(local_model_path, "config.json")
+                    
+                    # Check existence AND size > 1KB/10B
+                    has_bin = os.path.exists(bin_path) and os.path.getsize(bin_path) > 1024
+                    has_config = os.path.exists(config_path) and os.path.getsize(config_path) > 10
                     
                     if has_bin and has_config:
                         # Model exists and looks complete - use local path

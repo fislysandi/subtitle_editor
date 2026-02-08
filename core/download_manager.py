@@ -5,6 +5,7 @@ Implements real progress tracking using custom tqdm class.
 
 import os
 import threading
+import time
 from pathlib import Path
 from typing import Optional, Dict, Callable
 from dataclasses import dataclass
@@ -83,6 +84,7 @@ class ProgressTracker:
         # Get the callback from class variable (set by DownloadManager)
         self._callback = ProgressTracker._progress_callback
         self._cancel_event_ref = ProgressTracker._cancel_event
+        self.start_time = time.time()
 
     @classmethod
     def get_lock(cls):
@@ -125,7 +127,8 @@ class ProgressTracker:
         """Update progress by n units."""
         self.n += n
         if self._callback:
-            self._callback(self.n, self.total, self.desc)
+            elapsed = time.time() - self.start_time
+            self._callback(self.n, self.total, self.desc, elapsed)
 
     def set_description(self, desc: str = "", refresh: bool = True):
         """Set the description."""
@@ -235,17 +238,19 @@ class DownloadManager:
         return self.REPO_MAP[model_name]
 
     def is_cached(self, model_name: str) -> bool:
-        """Check if model is fully downloaded."""
+        """Check if model is fully downloaded (files exist and allow access)."""
         model_dir = self._get_model_dir(model_name)
         
         # Check if directory exists
         if not model_dir.exists():
             return False
             
-        # Check for essential model files
-        # faster-whisper needs at least model.bin and config.json
-        has_bin = (model_dir / "model.bin").exists()
-        has_config = (model_dir / "config.json").exists()
+        # Check for essential model files with sanity check on size
+        bin_path = model_dir / "model.bin"
+        config_path = model_dir / "config.json"
+        
+        has_bin = bin_path.exists() and bin_path.stat().st_size > 1024  # > 1KB
+        has_config = config_path.exists() and config_path.stat().st_size > 10
         
         return has_bin and has_config
 
@@ -260,7 +265,7 @@ class DownloadManager:
         else:
             return f"{bytes_val / (1024 * 1024 * 1024):.2f} GB"
 
-    def _progress_callback(self, downloaded: int, total: int, filename: str) -> None:
+    def _progress_callback(self, downloaded: int, total: int, filename: str, elapsed: float = 0) -> None:
         """Callback for progress updates from ProgressTracker."""
         if self._cancel_event.is_set():
             raise InterruptedError("Download cancelled")
@@ -270,7 +275,14 @@ class DownloadManager:
             pct = (downloaded / total) * 100
             dl_str = self._format_size(downloaded)
             total_str = self._format_size(total)
-            message = f"{dl_str} / {total_str} ({pct:.1f}%)"
+            
+            # Calculate speed
+            speed_str = ""
+            if elapsed > 0:
+                speed = downloaded / elapsed
+                speed_str = f" - {self._format_size(int(speed))}/s"
+                
+            message = f"{filename}: {dl_str} / {total_str} ({pct:.0f}%){speed_str}"
         else:
             message = f"Downloading {filename}..."
             
@@ -365,6 +377,13 @@ class DownloadManager:
             self._set_progress(
                 status=DownloadStatus.ERROR,
                 message=f"Error: {error_msg[:100]}",
+            )
+            
+        except OSError as e:
+            # Handle file system errors (like Errno 39 Directory not empty)
+            self._set_progress(
+                status=DownloadStatus.ERROR,
+                message=f"File Error: {str(e)[:100]}. Try deleting the 'models' folder in the addon directory.",
             )
 
         finally:
