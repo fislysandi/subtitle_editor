@@ -8,7 +8,7 @@ import bpy
 import subprocess
 import sys
 from bpy.types import Operator
-from bpy.props import EnumProperty, BoolProperty
+from ..core.dependency_manager import DependencyManager
 
 
 class SUBTITLE_OT_check_dependencies(Operator):
@@ -20,6 +20,102 @@ class SUBTITLE_OT_check_dependencies(Operator):
     bl_options = {"REGISTER", "INTERNAL"}
 
     def execute(self, context):
+        props = context.scene.subtitle_editor
+
+        # Debug: Print Python paths
+        print("\n=== Subtitle Editor Dependency Check ===")
+        print(f"Python executable: {sys.executable}")
+        print(f"Python version: {sys.version}")
+        print(f"sys.path contains {len(sys.path)} paths:")
+        for i, p in enumerate(sys.path[:5]):  # Print first 5 paths
+            print(f"  {i}: {p}")
+        if len(sys.path) > 5:
+            print(f"  ... and {len(sys.path) - 5} more paths")
+
+        # Check each dependency
+        deps_status = {
+            "faster_whisper": False,
+            "torch": False,
+            "pysubs2": False,
+            "onnxruntime": False,
+        }
+
+        # Check faster_whisper
+        try:
+            import faster_whisper
+
+            deps_status["faster_whisper"] = True
+            print("✓ faster_whisper found")
+        except ImportError as e:
+            print(f"✗ faster_whisper not found: {e}")
+
+        # Check torch
+        try:
+            import torch
+
+            deps_status["torch"] = True
+            print("✓ torch found")
+        except ImportError as e:
+            print(f"✗ torch not found: {e}")
+
+        # Check pysubs2
+        try:
+            import pysubs2
+
+            deps_status["pysubs2"] = True
+            print("✓ pysubs2 found")
+        except ImportError as e:
+            print(f"✗ pysubs2 not found: {e}")
+
+        # Check onnxruntime
+        try:
+            import onnxruntime
+
+            deps_status["onnxruntime"] = True
+            print("✓ onnxruntime found")
+        except ImportError as e:
+            print(f"✗ onnxruntime not found: {e}")
+
+        print("========================================\n")
+
+        # Update properties
+        props.deps_faster_whisper = deps_status["faster_whisper"]
+        props.deps_torch = deps_status["torch"]
+        props.deps_pysubs2 = deps_status["pysubs2"]
+        props.deps_onnxruntime = deps_status["onnxruntime"]
+
+        all_installed = all(deps_status.values())
+
+        # Also check GPU status (CUDA, MPS, XPU)
+        try:
+            import torch
+
+            gpu_detected = False
+
+            if torch.cuda.is_available():
+                gpu_detected = True
+            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                gpu_detected = True
+            elif hasattr(torch, "xpu") and torch.xpu.is_available():
+                gpu_detected = True
+
+            props.gpu_detected = gpu_detected
+        except Exception:
+            props.gpu_detected = False
+
+        if all_installed:
+            if props.gpu_detected:
+                self.report({"INFO"}, "All dependencies installed - GPU ready")
+            else:
+                self.report(
+                    {"WARNING"},
+                    "All dependencies installed - No GPU detected (CPU only)",
+                )
+        else:
+            missing = [k for k, v in deps_status.items() if not v]
+            self.report({"WARNING"}, f"Missing dependencies: {', '.join(missing)}")
+
+        return {"FINISHED"}
         props = context.scene.subtitle_editor
 
         # Debug: Print Python paths
@@ -145,30 +241,29 @@ class SUBTITLE_OT_install_dependencies(Operator):
         props = context.scene.subtitle_editor
 
         try:
-            # Get Python executable
-            python_exe = sys.executable
-
             # Base packages (always needed)
             # IMPORTANT: numpy<2.0 is required for compatibility with Blender's bundled modules
             packages = [
-                "numpy<2.0",
                 "faster-whisper",
                 "pysubs2>=1.8.0",
                 "onnxruntime>=1.24.1",
             ]
 
-            # Install all packages in a single command to ensure proper dependency resolution
-            print(f"Running command: {' '.join([python_exe, '-m', 'pip', 'install'] + packages)}")
-            props.deps_install_status = "Installing dependencies... Check System Console (Window > Toggle System Console) for details."
+            # Install all packages in a single command using UV dependency manager
+            props.deps_install_status = "Bootstrapping UV & resolving dependencies..."
             
-            # Construct command: python -m pip install numpy<2.0 faster-whisper ...
-            # Removed -q to show progress in system console
-            cmd = [python_exe, "-m", "pip", "install"] + packages
-
-            # Don't capture output so it goes to system console (user can see progress)
-            result = subprocess.run(
-                cmd, check=False
+            # This handles uv bootstrap automatically if needed
+            # We pass numpy<2.0 as constraint
+            cmd = DependencyManager.get_install_command(
+                packages, 
+                constraint="numpy<2.0"
             )
+
+            print(f"Running command: {' '.join(cmd)}")
+            props.deps_install_status = "Installing dependencies... Check System Console (Window > Toggle System Console) for details."
+
+            # Run command (output goes to system console)
+            result = subprocess.run(cmd, check=False)
 
             if result.returncode != 0:
                 props.deps_install_status = "Error: Installation failed. Check System Console for details."
@@ -178,7 +273,7 @@ class SUBTITLE_OT_install_dependencies(Operator):
             props.deps_install_status = (
                 "Dependencies installed! Install PyTorch below for GPU support."
             )
-
+            
             # Re-check dependencies
             bpy.app.timers.register(
                 lambda: bpy.ops.subtitle.check_dependencies(), first_interval=0.5
@@ -266,9 +361,6 @@ class SUBTITLE_OT_install_pytorch(Operator):
         pytorch_version = props.pytorch_version
 
         try:
-            # Get Python executable
-            python_exe = sys.executable
-
             # Base PyTorch packages
             packages = ["torch", "torchaudio"]
 
@@ -294,17 +386,23 @@ class SUBTITLE_OT_install_pytorch(Operator):
             # Install PyTorch
             props.pytorch_install_status = f"Installing PyTorch ({pytorch_version})..."
 
-            # IMPORTANT: numpy<2.0 is required for compatibility
-            # We add it here to ensure PyTorch install doesn't upgrade it
-            # Removed -q to show progress in system console
-            cmd = [python_exe, "-m", "pip", "install", "numpy<2.0"] + packages
+            # Prepare extra args for index-url if needed
+            extra_args = []
             if index_url:
-                cmd.extend(["--index-url", index_url])
+                extra_args.extend(["--index-url", index_url])
+
+            # IMPORTANT: numpy<2.0 is required for compatibility with aud module
+            # Use DependencyManager to get uv/pip command
+            cmd = DependencyManager.get_install_command(
+                packages, 
+                constraint="numpy<2.0",
+                extra_args=extra_args
+            )
 
             print(f"Running command: {' '.join(cmd)}")
             props.pytorch_install_status = "Installing... Check System Console (Window > Toggle System Console) for progress..."
 
-            # Don't capture output so it goes to system console (user can see progress)
+            # Run command (output goes to system console)
             result = subprocess.run(cmd, check=False)
 
             if result.returncode != 0:

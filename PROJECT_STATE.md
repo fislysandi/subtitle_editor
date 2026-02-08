@@ -258,6 +258,14 @@ cat PROJECT_STATE.md
 - **Error Handling**: Cleaned up bare `except:` clauses and added more descriptive status messages in operators.
 - **Path Handling**: Improved relative path resolution for audio/video strips.
 
+### 4. UV Dependency Manager Integration (2026-02-08)
+- **Feature**: Embedded `uv` package manager logic to handle all dependency installations.
+- **Benefits**:
+  - 🚀 **Extremely Fast**: Multi-threaded downloads significantly fast than standard pip.
+  - 🎯 **Accurate Pathing**: Explicitly targets Blender's Python executable using `--python` flag, solving "package not found" issues.
+  - 🔄 **Auto-Bootstrap**: Automatically downloads `uv` if not present.
+- **Files Changed**: Created `core/dependency_manager.py`, updated `operators/ops_dependencies.py`.
+
 ### 2. Restored Non-Blocking Model Download with Progress UI
 **Git History Preserved:** This is a new implementation based on commit 8942594, not a revert
 
