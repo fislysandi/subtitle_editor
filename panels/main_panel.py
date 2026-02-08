@@ -57,6 +57,13 @@ class SEQUENCER_PT_panel(Panel):
 
         # Edit section (moved from separate panel)
         layout.separator()
+        style_box = layout.box()
+        style_box.label(text="Batch Styling")
+        style_box.operator(
+            "subtitle.copy_style_from_active",
+            text="Copy Active Style to Selected",
+            icon="BRUSH_DATA",
+        )
 
         # Edit selected
         if scene.text_strip_items_index >= 0 and scene.text_strip_items:

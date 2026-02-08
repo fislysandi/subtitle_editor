@@ -360,6 +360,67 @@ class SUBTITLE_OT_apply_style(Operator):
         return {"FINISHED"}
 
 
+class SUBTITLE_OT_copy_style_from_active(Operator):
+    """Copy style from the active strip to other selected strips"""
+
+    bl_idname = "subtitle.copy_style_from_active"
+    bl_label = "Copy Style to Selected"
+    bl_description = "Copy the active strip's styling to other selected text strips"
+    bl_options = {"REGISTER", "UNDO"}
+
+    _STYLE_ATTRS = (
+        "font",
+        "font_size",
+        "color",
+        "use_shadow",
+        "shadow_color",
+        "use_box",
+        "box_color",
+        "box_margin",
+        "box_line_thickness",
+        "wrap_width",
+        "align_x",
+        "align_y",
+        "location",
+    )
+
+    def execute(self, context):
+        scene = context.scene
+        if not scene or not scene.sequence_editor:
+            self.report({"WARNING"}, "Open the Sequencer to copy styles")
+            return {"CANCELLED"}
+
+        active_strip = scene.sequence_editor.active_strip
+        if not active_strip or active_strip.type != "TEXT":
+            self.report({"WARNING"}, "Select a text strip to copy from")
+            return {"CANCELLED"}
+
+        selected = sequence_utils.get_selected_strips(context)
+        targets = [
+            strip
+            for strip in selected
+            if strip.type == "TEXT" and strip != active_strip
+        ]
+
+        if not targets:
+            self.report({"WARNING"}, "Select other text strips to receive the style")
+            return {"CANCELLED"}
+
+        copied = 0
+        for strip in targets:
+            for attr in self._STYLE_ATTRS:
+                if hasattr(active_strip, attr) and hasattr(strip, attr):
+                    try:
+                        setattr(strip, attr, getattr(active_strip, attr))
+                    except (AttributeError, TypeError):
+                        continue
+            copied += 1
+
+        sequence_utils.refresh_list(context)
+        self.report({"INFO"}, f"Copied style to {copied} strip(s)")
+        return {"FINISHED"}
+
+
 class SUBTITLE_OT_insert_line_breaks(Operator):
     """Insert line breaks into selected subtitles"""
 
@@ -414,5 +475,6 @@ classes = [
     SUBTITLE_OT_remove_selected_strip,
     SUBTITLE_OT_update_text,
     SUBTITLE_OT_apply_style,
+    SUBTITLE_OT_copy_style_from_active,
     SUBTITLE_OT_insert_line_breaks,
 ]
