@@ -318,8 +318,7 @@ cat PROJECT_STATE.md
 ### 3. Code Review & Agent Context
 - Comprehensive code review by CodeReviewer agent
 - Overall quality: **GOOD** ✅ Production-ready after thread safety fix
-- Created `.opencode/context.md` - Core development standards
-- Created `.opencode/agent-context.md` - Comprehensive agent guide
+- Packed all context references into `~/.config/opencode/context/project/blender-subtitle-editor/` (the same docs that previously lived in `.opencode/`).
 - Documented Blender 5.0 API compatibility requirements
 - Listed all installed dependencies with versions
 - Identified 5 warnings to fix (1 critical thread safety issue)
@@ -374,6 +373,7 @@ cat PROJECT_STATE.md
 2. **Understand structure** - Files are in `panels/`, `operators/`, `core/`, etc.
 3. **Framework rules** - Uses auto_load, no manual registration needed
 4. **Test frequently** - Use `uv run test subtitle_editor` for hot-reload
+5. **Load context** - Use `rg` on `~/.config/opencode/context/project/blender-subtitle-editor/` (no glob) and point the agent to this path before executing work.
 
 **What can be modified:**
 - ✅ Operators in `operators/`
@@ -478,9 +478,14 @@ To enable faster model downloads and avoid rate limits, you can set a Hugging Fa
 
 ## 📚 Development Context Files
 
-Located in `.opencode/` directory for AI assistants:
+Located under `~/.config/opencode/context/project/blender-subtitle-editor/` for agents. Use ripgrep (`rg`) to discover or search these files; do not rely on glob expansion. Example commands:
 
-### `.opencode/context.md`
+```bash
+rg --files ~/.config/opencode/context/project/blender-subtitle-editor/             # list context files
+rg "pattern" ~/.config/opencode/context/project/blender-subtitle-editor/      # keyword search
+```
+
+### `context.md`
 Critical development standards:
 - Blender 5.0 API changes (sequences_all → sequences)
 - Type annotations required for all bpy.props
@@ -488,7 +493,7 @@ Critical development standards:
 - Async operations pattern (threading + timers)
 - Common pitfalls and testing procedures
 
-### `.opencode/agent-context.md`
+### `agent-context.md`
 Comprehensive agent guide:
 - All installed dependencies with versions
 - Code architecture and patterns
@@ -498,6 +503,11 @@ Comprehensive agent guide:
 - Thread safety requirements
 - Complete file structure
 - Testing with hot reload
+
+### Additional references
+- `architecture-patterns.md` – Visual flows for context and dependency handling
+- `guides/dependency-management.md` – UV-first install workflow
+- `concepts/overview.md`, `lookup/context-index.md`, etc. all live under the same directory (use `rg --files` to list them).
 
 ## ⚠️ Code Review Findings
 
