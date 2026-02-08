@@ -38,6 +38,7 @@ class SUBTITLE_OT_transcribe(Operator):
             "translate": props.translate,
             "word_timestamps": props.word_timestamps,
             "vad_filter": props.vad_filter,
+            "subtitle_channel": props.subtitle_channel,
             "render_fps": scene.render.fps,
         }
 
@@ -138,7 +139,7 @@ class SUBTITLE_OT_transcribe(Operator):
 
             # Create text strips in main thread
             bpy.app.timers.register(
-                lambda: self._create_strips(context, segments, config["render_fps"]), first_interval=0.0
+                lambda: self._create_strips(context, segments, config), first_interval=0.0
             )
 
             # Clean up temp file
@@ -160,18 +161,34 @@ class SUBTITLE_OT_transcribe(Operator):
 
             bpy.app.timers.register(cleanup_props, first_interval=0.0)
 
-    def _create_strips(self, context, segments, render_fps):
+    def _create_strips(self, context, segments, config):
         """Create text strips from transcription (called in main thread)"""
         scene = context.scene
 
         # Determine channel
-        channel = 3
-        if scene.sequence_editor:
-            # Find empty channel
-            for seq in scene.sequence_editor.strips:
-                if seq.channel >= channel:
-                    channel = seq.channel + 1
-            channel = min(channel, 128)
+        channel = config.get("subtitle_channel", 3)
+        # If user wants a specific channel, we should respect it, or find next available if occupied?
+        # User request says: "put it on a track defined by bpy.data.scenes["Scene"].subtitle_editor.subtitle_channel"
+        # Implies strict adherence to that channel.
+        # But commonly addons find *next available* from that point.
+        # Let's check existing logic: it starts at 3 and finds empty.
+        # New logic: Start at config["subtitle_channel"] and find next available if needed?
+        # Or just use that channel? Usually subtitles shouldn't overlap.
+        # If we just dump everything on one channel they might overlap if segments overlap (rare for whisper).
+        # Let's respect the START channel, and if there are existing strips *on that channel* that overlap...
+        # The existing logic finds a completely empty channel? No, it finding a channel number higher than any existing strip?
+        # "if seq.channel >= channel: channel = seq.channel + 1" -> this finds the *highest* used channel + 1.
+        # This completely ignores "3" if there's something on 4.
+        
+        # Correct logic for "use defined channel":
+        # Just use the channel provided. If the user says channel 5, put it on channel 5.
+        # If they want it on a new channel, they change the setting.
+        # However, to avoid overwriting/mess, maybe we should just use it.
+        
+        # Let's trust the user's "defined by... subtitle_channel" request literally.
+        # But we need render_fps too.
+        
+        render_fps = config["render_fps"]
 
         # Create strips
         for i, seg in enumerate(segments):
