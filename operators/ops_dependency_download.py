@@ -96,12 +96,11 @@ class SUBTITLE_OT_download_dependencies(Operator):
     bl_description = "Install required Python packages (non-blocking)"
     bl_options = {"REGISTER", "UNDO"}
 
-    # Class variables to persist across modal calls
-    _timer = None
-    _thread = None
-    _state = None
-    _packages = None
-    _use_uv = True
+    _timer: Optional[bpy.types.Timer]
+    _thread: Optional[threading.Thread]
+    _state: Optional[DependencyDownloadState]
+    _packages: list
+    _use_uv: bool
 
     def modal(self, context, event) -> set:
         """
@@ -113,6 +112,8 @@ class SUBTITLE_OT_download_dependencies(Operator):
             {'FINISHED'} - Complete the operator
             {'CANCELLED'} - Cancel the operator
         """
+        props = context.scene.subtitle_editor
+
         if event.type == "ESC":
             self._request_cancel(context)
             self.report({"WARNING"}, "Download cancelled")
@@ -125,6 +126,10 @@ class SUBTITLE_OT_download_dependencies(Operator):
 
         # Only update on timer events (every 0.1 seconds)
         if event.type == "TIMER":
+            if not props.is_installing_deps:
+                self._request_cancel(context)
+                return {"CANCELLED"}
+
             # Get current progress from shared state (thread-safe)
             progress = self._state.get_progress()
             status = self._state.get_status()
@@ -133,6 +138,7 @@ class SUBTITLE_OT_download_dependencies(Operator):
             wm = context.window_manager
             wm.progress_update(int(progress * 100))
             context.workspace.status_text_set(status)
+            props.deps_install_status = status
 
             # Check if complete
             if self._state.is_complete():
@@ -162,6 +168,12 @@ class SUBTITLE_OT_download_dependencies(Operator):
         Start the modal operator.
         Sets up timer, modal handler, and background thread.
         """
+        props = context.scene.subtitle_editor
+
+        if props.is_installing_deps:
+            self.report({"WARNING"}, "Dependency installation already in progress")
+            return {"CANCELLED"}
+
         # Define packages to install
         self._packages = [
             "faster-whisper",
@@ -174,6 +186,9 @@ class SUBTITLE_OT_download_dependencies(Operator):
 
         # Initialize shared state (thread-safe)
         self._state = DependencyDownloadState()
+
+        props.is_installing_deps = True
+        props.deps_install_status = "Starting..."
 
         # Start Blender's built-in progress bar
         wm = context.window_manager
@@ -214,12 +229,14 @@ class SUBTITLE_OT_download_dependencies(Operator):
 
     def _cleanup(self, context):
         """Clean up timer and status/progress UI."""
+        props = context.scene.subtitle_editor
         context.workspace.status_text_set(None)
         if self._timer:
             wm = context.window_manager
             wm.event_timer_remove(self._timer)
             wm.progress_end()
             self._timer = None
+        props.is_installing_deps = False
 
     def _download_worker(self, packages: list, state: DependencyDownloadState):
         """
@@ -283,11 +300,13 @@ class SUBTITLE_OT_cancel_download_deps(Operator):
     bl_options = {"REGISTER"}
 
     def execute(self, context) -> set:
-        # The modal operator will check the state and clean up
-        # This operator just signals cancellation
-        if SUBTITLE_OT_download_dependencies._state:
-            SUBTITLE_OT_download_dependencies._state.mark_cancelled()
+        props = context.scene.subtitle_editor
+        if props.is_installing_deps:
+            props.is_installing_deps = False
+            props.deps_install_status = "Cancelling..."
             self.report({"INFO"}, "Cancelling download...")
+        else:
+            self.report({"WARNING"}, "No dependency install in progress")
         return {"FINISHED"}
 
 
