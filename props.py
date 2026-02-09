@@ -25,7 +25,7 @@ def speaker_items(self, context):
         getattr(self, "speaker_name_2", "Speaker 2"),
         getattr(self, "speaker_name_3", "Speaker 3"),
     ]
-    return [(idx + 1, names[idx], "") for idx in range(count)]
+    return [(str(idx + 1), names[idx], "") for idx in range(count)]
 
 
 class TextStripItem(PropertyGroup):
@@ -460,7 +460,10 @@ class SubtitleEditorProperties(PropertyGroup):
         if getattr(self, "_updating_speaker_choice", False):
             return
         try:
-            self.speaker_index = int(self.speaker_choice)
+            if isinstance(self.speaker_choice, int):
+                self.speaker_index = max(1, self.speaker_choice + 1)
+            else:
+                self.speaker_index = int(self.speaker_choice)
         except (TypeError, ValueError):
             self.speaker_index = 1
 
@@ -543,7 +546,7 @@ class SubtitleEditorProperties(PropertyGroup):
             self.speaker_index = self.speaker_count
 
         self._updating_speaker_choice = True
-        self.speaker_choice = self.speaker_index
+        self.speaker_choice = str(self.speaker_index)
         self._updating_speaker_choice = False
 
         label = self._speaker_label()
@@ -931,7 +934,7 @@ class SubtitleEditorProperties(PropertyGroup):
         name="Speaker",
         description="Active speaker selection",
         items=speaker_items,
-        default=1,
+        default=0,
         update=lambda self, context: self.update_speaker_choice(context),
     )
 
