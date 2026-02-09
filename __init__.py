@@ -101,12 +101,12 @@ _addon_properties = {
 # List of classes to register manually (not auto-discovered)
 _manual_classes = [
     SubtitleEditorAddonPreferences,
-    SubtitleEditorProperties,
-    TextStripItem,
 ]
 
 
 def _sync_speaker_names_handler(depsgraph):
+    if not hasattr(bpy.types.Scene, "subtitle_editor"):
+        add_properties(_addon_properties)
     for scene in bpy.data.scenes:
         props = getattr(scene, "subtitle_editor", None)
         if not props or not scene.sequence_editor:
@@ -118,7 +118,7 @@ def _sync_speaker_names_handler(depsgraph):
 
         if channel_state != cache:
             scene["_subtitle_channel_cache"] = channel_state
-            props.update_speaker_channels(bpy.context)
+            props.update_speaker_channels_for_scene(scene)
 
 
 # =============================================================================
