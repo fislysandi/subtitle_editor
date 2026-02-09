@@ -923,7 +923,7 @@ class SubtitleEditorProperties(PropertyGroup):
         name="Speaker",
         description="Active speaker selection",
         items=speaker_items,
-        default="1",
+        default=1,
         update=lambda self, context: self.update_speaker_choice(context),
     )
 
