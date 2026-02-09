@@ -546,6 +546,64 @@ class SUBTITLE_OT_save_style_preset(Operator):
         return {"FINISHED"}
 
 
+class SUBTITLE_OT_adjust_speaker_count(Operator):
+    """Adjust the number of speaker tabs"""
+
+    bl_idname = "subtitle.adjust_speaker_count"
+    bl_label = "Adjust Speaker Count"
+    bl_description = "Increase or decrease the number of speaker slots"
+    bl_options = {"REGISTER", "UNDO"}
+
+    direction: bpy.props.IntProperty(default=1)
+    name: bpy.props.StringProperty(name="Speaker Name", default="")
+
+    def invoke(self, context, event):
+        if self.direction > 0:
+            props = getattr(context.scene, "subtitle_editor", None)
+            if not props:
+                self.report({"WARNING"}, "Subtitle Studio is not registered")
+                return {"CANCELLED"}
+            next_index = max(1, min(3, props.speaker_count + 1))
+            if next_index == 2:
+                self.name = props.speaker_name_2
+            elif next_index == 3:
+                self.name = props.speaker_name_3
+            return context.window_manager.invoke_props_dialog(self)
+        return self.execute(context)
+
+    def execute(self, context):
+        scene = context.scene
+        props = getattr(scene, "subtitle_editor", None)
+        if not props:
+            self.report({"WARNING"}, "Subtitle Studio is not registered")
+            return {"CANCELLED"}
+
+        delta = 1 if self.direction >= 0 else -1
+        new_count = max(1, min(3, props.speaker_count + delta))
+
+        if new_count == props.speaker_count:
+            return {"FINISHED"}
+
+        props.speaker_count = new_count
+        if props.speaker_index > new_count:
+            props.speaker_index = new_count
+
+        if self.direction > 0:
+            value = (self.name or "").strip()
+            if not value:
+                self.report({"WARNING"}, "Speaker name cannot be empty")
+                return {"CANCELLED"}
+            if new_count == 2:
+                props.speaker_name_2 = value
+            elif new_count == 3:
+                props.speaker_name_3 = value
+
+        props.update_speaker_tab(context)
+        props.update_speaker_channels(context)
+        sequence_utils.refresh_list(context)
+        return {"FINISHED"}
+
+
 class SUBTITLE_OT_select_speaker_tab(Operator):
     """Select or rename a speaker tab"""
 
@@ -822,6 +880,7 @@ classes = [
     SUBTITLE_OT_apply_style,
     SUBTITLE_OT_apply_style_preset,
     SUBTITLE_OT_save_style_preset,
+    SUBTITLE_OT_adjust_speaker_count,
     SUBTITLE_OT_select_speaker_tab,
     SUBTITLE_OT_rename_speaker,
     SUBTITLE_OT_copy_style_from_active,
