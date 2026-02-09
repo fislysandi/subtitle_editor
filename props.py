@@ -20,6 +20,8 @@ from .utils import file_utils
 
 def speaker_items(self, context):
     count = getattr(self, "speaker_count", 3) or 3
+    if count < 1:
+        count = 1
     names = [
         getattr(self, "speaker_name_1", "Speaker 1"),
         getattr(self, "speaker_name_2", "Speaker 2"),
@@ -456,14 +458,16 @@ class SubtitleEditorProperties(PropertyGroup):
             return self.speaker_name_3
         return self.speaker_name_1
 
+    def _speaker_choice_ids(self):
+        return {item[0] for item in speaker_items(self, None)}
+
     def update_speaker_choice(self, context):
         if getattr(self, "_updating_speaker_choice", False):
             return
+        if self.speaker_choice not in self._speaker_choice_ids():
+            return
         try:
-            if isinstance(self.speaker_choice, int):
-                self.speaker_index = max(1, self.speaker_choice + 1)
-            else:
-                self.speaker_index = int(self.speaker_choice)
+            self.speaker_index = int(self.speaker_choice)
         except (TypeError, ValueError):
             self.speaker_index = 1
 
@@ -546,7 +550,10 @@ class SubtitleEditorProperties(PropertyGroup):
             self.speaker_index = self.speaker_count
 
         self._updating_speaker_choice = True
-        self.speaker_choice = str(self.speaker_index)
+        choice = str(self.speaker_index)
+        if choice not in self._speaker_choice_ids():
+            choice = next(iter(self._speaker_choice_ids()), "1")
+        self.speaker_choice = choice
         self._updating_speaker_choice = False
 
         label = self._speaker_label()

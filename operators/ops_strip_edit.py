@@ -623,6 +623,9 @@ class SUBTITLE_OT_adjust_speaker_count(Operator):
         props.update_speaker_tab(context)
         props.update_speaker_channels(context)
         sequence_utils.refresh_list(context)
+        for area in context.screen.areas:
+            if area.type == "SEQUENCE_EDITOR":
+                area.tag_redraw()
         return {"FINISHED"}
 
 
