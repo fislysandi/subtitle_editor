@@ -650,27 +650,40 @@ class SubtitleEditorProperties(PropertyGroup):
 
         self.speaker_warning = warning
 
-        for item in context.scene.text_strip_items:
-            if item.channel in channel_to_speaker and item.speaker not in mapping:
-                item.speaker = channel_to_speaker[item.channel]
+        strip_by_name = {
+            strip.name: strip
+            for strip in context.scene.sequence_editor.strips
+            if strip.type == "TEXT"
+        }
 
-            channel = mapping.get(item.speaker, self.subtitle_channel)
-            item.channel = channel
+        for item in context.scene.text_strip_items:
+            strip = strip_by_name.get(item.name)
+            if strip and strip.channel in channel_to_speaker:
+                new_speaker = channel_to_speaker[strip.channel]
+                if item.speaker != new_speaker:
+                    item.speaker = new_speaker
+                    item.text = self._apply_speaker_prefix(strip.text, item.speaker)
+
+                item.channel = strip.channel
+            else:
+                channel = mapping.get(item.speaker, self.subtitle_channel)
+                item.channel = channel
+
             current_name = item.name
-            for strip in context.scene.sequence_editor.strips:
-                if strip.name == item.name and strip.type == "TEXT":
-                    strip.channel = channel
-                    strip.text = self._apply_speaker_prefix(strip.text, item.speaker)
-                    item.text = strip.text
-                    idx = context.scene.text_strip_items.find(item.name)
-                    self._update_strip_name(
-                        context.scene,
-                        item,
-                        strip.text,
-                        (idx + 1 if idx >= 0 else 1),
-                        current_name,
-                    )
-                    break
+            strip = strip_by_name.get(item.name)
+            if strip:
+                if strip.channel != item.channel:
+                    strip.channel = item.channel
+                strip.text = self._apply_speaker_prefix(strip.text, item.speaker)
+                item.text = strip.text
+                idx = context.scene.text_strip_items.find(item.name)
+                self._update_strip_name(
+                    context.scene,
+                    item,
+                    strip.text,
+                    (idx + 1 if idx >= 0 else 1),
+                    current_name,
+                )
 
         self._reset_speaker_channel_names(context.scene, target_channels)
         self._set_channel_name(
