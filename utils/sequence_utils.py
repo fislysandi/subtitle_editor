@@ -8,12 +8,25 @@ import bpy
 from typing import Optional, List, Any
 
 
-def get_selected_strip(context) -> Optional[Any]:
-    """Get the currently selected strip in the sequencer"""
-    if not context.scene.sequence_editor:
+def _get_sequence_collection(scene):
+    if not scene.sequence_editor:
         return None
 
-    selected = [s for s in context.scene.sequence_editor.sequences if s.select]
+    seq_editor = scene.sequence_editor
+    for attr in ("sequences", "sequences_all", "strips"):
+        sequences = getattr(seq_editor, attr, None)
+        if sequences is not None:
+            return sequences
+    return None
+
+
+def get_selected_strip(context) -> Optional[Any]:
+    """Get the currently selected strip in the sequencer"""
+    sequences = _get_sequence_collection(context.scene)
+    if not sequences:
+        return None
+
+    selected = [s for s in sequences if s.select]
     if selected:
         return selected[0]
     return None
@@ -21,10 +34,11 @@ def get_selected_strip(context) -> Optional[Any]:
 
 def get_selected_strips(context) -> List[Any]:
     """Get all selected strips in the sequencer"""
-    if not context.scene.sequence_editor:
+    sequences = _get_sequence_collection(context.scene)
+    if not sequences:
         return []
 
-    return [s for s in context.scene.sequence_editor.sequences if s.select]
+    return [s for s in sequences if s.select]
 
 
 def get_strip_filepath(strip) -> Optional[str]:
@@ -68,8 +82,12 @@ def create_text_strip(
     # Blender 5.0 API: new_effect() uses 'length' instead of 'frame_end'
     length = max(1, frame_end - frame_start)
 
+    sequences = _get_sequence_collection(scene)
+    if sequences is None:
+        return None
+
     # Create text strip
-    strip = scene.sequence_editor.sequences.new_effect(
+    strip = sequences.new_effect(
         name=name,
         type="TEXT",
         channel=channel,
@@ -99,7 +117,8 @@ def refresh_list(context):
     # Clear current list
     context.scene.text_strip_items.clear()
 
-    if not context.scene.sequence_editor:
+    sequences = _get_sequence_collection(context.scene)
+    if not sequences:
         return
 
     # Get the designated subtitle channel from settings
@@ -108,7 +127,7 @@ def refresh_list(context):
     channels = {subtitle_channel + offset for offset in range(speaker_count)}
 
     # Add only text strips that are on the subtitle channel
-    for strip in context.scene.sequence_editor.sequences:
+    for strip in sequences:
         if strip.type == "TEXT" and strip.channel in channels:
             item = context.scene.text_strip_items.add()
             item.name = strip.name
@@ -136,10 +155,11 @@ def refresh_list(context):
 
 def get_text_strips(scene) -> List[Any]:
     """Get all text strips in the scene"""
-    if not scene.sequence_editor:
+    sequences = _get_sequence_collection(scene)
+    if not sequences:
         return []
 
-    return [s for s in scene.sequence_editor.sequences if s.type == "TEXT"]
+    return [s for s in sequences if s.type == "TEXT"]
 
 
 def on_text_strip_index_update(self, context):
@@ -160,14 +180,16 @@ def on_text_strip_index_update(self, context):
 
         # Optional: Select the actual strip in sequencer
         # This keeps the UI list and Sequencer selection in sync
-        if context.scene.sequence_editor:
+        sequences = _get_sequence_collection(context.scene)
+        if sequences:
             # Deselect all
-            for s in context.scene.sequence_editor.sequences:
+            for s in sequences:
                 s.select = False
 
             # Select the matching strip
-            for s in context.scene.sequence_editor.sequences:
+            for s in sequences:
                 if s.name == item.name:
                     s.select = True
-                    context.scene.sequence_editor.active_strip = s
+                    if context.scene.sequence_editor:
+                        context.scene.sequence_editor.active_strip = s
                     break
