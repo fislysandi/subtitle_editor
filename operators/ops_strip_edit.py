@@ -2,6 +2,8 @@
 Strip Edit Operators
 """
 
+import time
+
 import bpy
 from bpy.types import Operator
 
@@ -54,6 +56,100 @@ def _get_unique_strip_name(scene, base_name: str) -> str:
     return f"{base_name}_{index}"
 
 
+def _select_strip_by_index(context, index: int) -> bool:
+    scene = context.scene
+
+    if index < 0 or index >= len(scene.text_strip_items):
+        return False
+
+    item = scene.text_strip_items[index]
+
+    if scene.sequence_editor:
+        for strip in scene.sequence_editor.strips:
+            strip.select = strip.name == item.name
+            if strip.name == item.name:
+                scene.frame_current = strip.frame_final_start
+
+    scene.subtitle_editor.current_text = item.text
+    scene.text_strip_items_index = index
+    return True
+
+
+def _get_active_item(scene):
+    index = scene.text_strip_items_index
+    if index < 0 or index >= len(scene.text_strip_items):
+        return None
+    return scene.text_strip_items[index]
+
+
+def _get_preset_data(props, preset_id: str):
+    if preset_id == "PRESET_1":
+        return {
+            "name": props.preset_1_name,
+            "font_size": props.preset_1_font_size,
+            "text_color": props.preset_1_text_color,
+            "shadow_color": props.preset_1_shadow_color,
+            "v_align": props.preset_1_v_align,
+            "wrap_width": props.preset_1_wrap_width,
+        }
+    if preset_id == "PRESET_2":
+        return {
+            "name": props.preset_2_name,
+            "font_size": props.preset_2_font_size,
+            "text_color": props.preset_2_text_color,
+            "shadow_color": props.preset_2_shadow_color,
+            "v_align": props.preset_2_v_align,
+            "wrap_width": props.preset_2_wrap_width,
+        }
+    return {
+        "name": props.preset_3_name,
+        "font_size": props.preset_3_font_size,
+        "text_color": props.preset_3_text_color,
+        "shadow_color": props.preset_3_shadow_color,
+        "v_align": props.preset_3_v_align,
+        "wrap_width": props.preset_3_wrap_width,
+    }
+
+
+def _set_preset_data(props, preset_id: str):
+    if preset_id == "PRESET_1":
+        props.preset_1_font_size = props.font_size
+        props.preset_1_text_color = props.text_color
+        props.preset_1_shadow_color = props.shadow_color
+        props.preset_1_v_align = props.v_align
+        props.preset_1_wrap_width = props.wrap_width
+        return
+    if preset_id == "PRESET_2":
+        props.preset_2_font_size = props.font_size
+        props.preset_2_text_color = props.text_color
+        props.preset_2_shadow_color = props.shadow_color
+        props.preset_2_v_align = props.v_align
+        props.preset_2_wrap_width = props.wrap_width
+        return
+    props.preset_3_font_size = props.font_size
+    props.preset_3_text_color = props.text_color
+    props.preset_3_shadow_color = props.shadow_color
+    props.preset_3_v_align = props.v_align
+    props.preset_3_wrap_width = props.wrap_width
+
+
+def _get_speaker_name(props, index: int) -> str:
+    if index == 2:
+        return props.speaker_name_2
+    if index == 3:
+        return props.speaker_name_3
+    return props.speaker_name_1
+
+
+def _set_speaker_name(props, index: int, value: str) -> None:
+    if index == 2:
+        props.speaker_name_2 = value
+    elif index == 3:
+        props.speaker_name_3 = value
+    else:
+        props.speaker_name_1 = value
+
+
 class SUBTITLE_OT_refresh_list(Operator):
     """Refresh the list of text strips"""
 
@@ -78,24 +174,55 @@ class SUBTITLE_OT_select_strip(Operator):
     index: bpy.props.IntProperty()
 
     def execute(self, context):
-        scene = context.scene
+        if not _select_strip_by_index(context, self.index):
+            return {"CANCELLED"}
+        return {"FINISHED"}
 
-        if self.index < 0 or self.index >= len(scene.text_strip_items):
+
+class SUBTITLE_OT_select_next_strip(Operator):
+    """Select the next subtitle strip"""
+
+    bl_idname = "subtitle.select_next_strip"
+    bl_label = "Next Subtitle"
+    bl_description = "Select the next subtitle strip in the list"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        scene = context.scene
+        total = len(scene.text_strip_items)
+        if total == 0:
             return {"CANCELLED"}
 
-        item = scene.text_strip_items[self.index]
+        current = scene.text_strip_items_index
+        next_index = min(total - 1, current + 1 if current >= 0 else 0)
 
-        # Find and select the strip
-        if scene.sequence_editor:
-            for strip in scene.sequence_editor.strips:
-                strip.select = strip.name == item.name
-                if strip.name == item.name:
-                    # Jump to strip
-                    scene.frame_current = strip.frame_final_start
+        if not _select_strip_by_index(context, next_index):
+            return {"CANCELLED"}
+        return {"FINISHED"}
 
-        # Update current text
-        scene.subtitle_editor.current_text = item.text
 
+class SUBTITLE_OT_select_previous_strip(Operator):
+    """Select the previous subtitle strip"""
+
+    bl_idname = "subtitle.select_previous_strip"
+    bl_label = "Previous Subtitle"
+    bl_description = "Select the previous subtitle strip in the list"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        scene = context.scene
+        total = len(scene.text_strip_items)
+        if total == 0:
+            return {"CANCELLED"}
+
+        current = scene.text_strip_items_index
+        if current == -1:
+            prev_index = max(0, total - 1)
+        else:
+            prev_index = max(0, current - 1)
+
+        if not _select_strip_by_index(context, prev_index):
+            return {"CANCELLED"}
         return {"FINISHED"}
 
 
@@ -192,6 +319,7 @@ class SUBTITLE_OT_add_strip_at_cursor(Operator):
 
         scene.subtitle_editor.current_text = strip.text
         scene.frame_current = current_frame
+        scene.subtitle_editor.update_speaker_channels(context)
         return {"FINISHED"}
 
 
@@ -276,6 +404,218 @@ class SUBTITLE_OT_update_text(Operator):
                 if strip.name == item.name and strip.type == "TEXT":
                     strip.text = new_text
                     break
+
+
+def _jump_to_selected(context, edge: str):
+    scene = context.scene
+    item = _get_active_item(scene)
+    if not item:
+        return False, "No subtitle selected"
+
+    if not scene.sequence_editor:
+        return False, "No sequence editor"
+
+    for strip in scene.sequence_editor.strips:
+        if strip.name == item.name and strip.type == "TEXT":
+            if edge == "END":
+                scene.frame_current = strip.frame_final_end
+            else:
+                scene.frame_current = strip.frame_final_start
+            strip.select = True
+            scene.sequence_editor.active_strip = strip
+            return True, ""
+
+    return False, "Selected subtitle not found"
+
+
+class SUBTITLE_OT_jump_to_selected_start(Operator):
+    """Jump timeline to the selected subtitle start"""
+
+    bl_idname = "subtitle.jump_to_selected_start"
+    bl_label = "Jump to Start"
+    bl_description = "Jump the timeline to the selected subtitle start"
+    bl_options = {"REGISTER"}
+
+    def execute(self, context):
+        ok, message = _jump_to_selected(context, "START")
+        if not ok:
+            self.report({"WARNING"}, message)
+            return {"CANCELLED"}
+        return {"FINISHED"}
+
+
+class SUBTITLE_OT_jump_to_selected_end(Operator):
+    """Jump timeline to the selected subtitle end"""
+
+    bl_idname = "subtitle.jump_to_selected_end"
+    bl_label = "Jump to End"
+    bl_description = "Jump the timeline to the selected subtitle end"
+    bl_options = {"REGISTER"}
+
+    def execute(self, context):
+        ok, message = _jump_to_selected(context, "END")
+        if not ok:
+            self.report({"WARNING"}, message)
+            return {"CANCELLED"}
+        return {"FINISHED"}
+
+
+class SUBTITLE_OT_nudge_strip(Operator):
+    """Nudge selected subtitle timing"""
+
+    bl_idname = "subtitle.nudge_strip"
+    bl_label = "Nudge Subtitle"
+    bl_description = "Nudge subtitle start/end by the step size"
+    bl_options = {"REGISTER", "UNDO"}
+
+    edge: bpy.props.EnumProperty(
+        items=[
+            ("START", "Start", "Nudge start"),
+            ("END", "End", "Nudge end"),
+        ]
+    )
+
+    direction: bpy.props.IntProperty(default=1)
+
+    def execute(self, context):
+        scene = context.scene
+        props = scene.subtitle_editor
+        item = _get_active_item(scene)
+        if not item:
+            self.report({"WARNING"}, "No subtitle selected")
+            return {"CANCELLED"}
+
+        delta = max(1, props.nudge_step) * (1 if self.direction >= 0 else -1)
+
+        if self.edge == "START":
+            item.frame_start = max(scene.frame_start, item.frame_start + delta)
+        else:
+            item.frame_end = max(item.frame_start + 1, item.frame_end + delta)
+
+        return {"FINISHED"}
+
+
+class SUBTITLE_OT_apply_style_preset(Operator):
+    """Apply a style preset to the current editor values"""
+
+    bl_idname = "subtitle.apply_style_preset"
+    bl_label = "Apply Style Preset"
+    bl_description = "Load a style preset into the current editor controls"
+    bl_options = {"REGISTER", "UNDO"}
+
+    preset_id: bpy.props.EnumProperty(
+        items=[
+            ("PRESET_1", "Preset 1", "Use preset 1"),
+            ("PRESET_2", "Preset 2", "Use preset 2"),
+            ("PRESET_3", "Preset 3", "Use preset 3"),
+        ]
+    )
+
+    def execute(self, context):
+        props = context.scene.subtitle_editor
+        preset = _get_preset_data(props, self.preset_id)
+
+        props.font_size = preset["font_size"]
+        props.text_color = preset["text_color"]
+        props.shadow_color = preset["shadow_color"]
+        props.v_align = preset["v_align"]
+        props.wrap_width = preset["wrap_width"]
+
+        return {"FINISHED"}
+
+
+class SUBTITLE_OT_save_style_preset(Operator):
+    """Save the current style into a preset slot"""
+
+    bl_idname = "subtitle.save_style_preset"
+    bl_label = "Save Style Preset"
+    bl_description = "Save current style values into a preset slot"
+    bl_options = {"REGISTER", "UNDO"}
+
+    preset_id: bpy.props.EnumProperty(
+        items=[
+            ("PRESET_1", "Preset 1", "Save to preset 1"),
+            ("PRESET_2", "Preset 2", "Save to preset 2"),
+            ("PRESET_3", "Preset 3", "Save to preset 3"),
+        ]
+    )
+
+    def execute(self, context):
+        props = context.scene.subtitle_editor
+        _set_preset_data(props, self.preset_id)
+        return {"FINISHED"}
+
+
+class SUBTITLE_OT_select_speaker_tab(Operator):
+    """Select or rename a speaker tab"""
+
+    bl_idname = "subtitle.select_speaker_tab"
+    bl_label = "Select Speaker"
+    bl_description = "Select speaker tab (right click to rename)"
+    bl_options = {"REGISTER"}
+
+    index: bpy.props.IntProperty(default=1, min=1, max=3)
+
+    def invoke(self, context, event):
+        if event.type == "RIGHTMOUSE":
+            bpy.ops.subtitle.rename_speaker("INVOKE_DEFAULT", index=self.index)
+            return {"FINISHED"}
+        if event.type == "LEFTMOUSE" and event.value == "DOUBLE_CLICK":
+            bpy.ops.subtitle.rename_speaker("INVOKE_DEFAULT", index=self.index)
+            return {"FINISHED"}
+        if event.type == "LEFTMOUSE" and event.value == "PRESS":
+            wm = context.window_manager
+            key = f"_subtitle_speaker_click_{self.index}"
+            now = time.monotonic()
+            last_click = getattr(wm, key, 0.0)
+            setattr(wm, key, now)
+            if now - last_click <= 0.35:
+                bpy.ops.subtitle.rename_speaker("INVOKE_DEFAULT", index=self.index)
+                return {"FINISHED"}
+        return self.execute(context)
+
+    def execute(self, context):
+        props = context.scene.subtitle_editor
+        props.speaker_index = self.index
+        return {"FINISHED"}
+
+
+class SUBTITLE_OT_rename_speaker(Operator):
+    """Rename a speaker tab"""
+
+    bl_idname = "subtitle.rename_speaker"
+    bl_label = "Rename Speaker"
+    bl_description = "Rename speaker tab"
+    bl_options = {"REGISTER", "UNDO"}
+
+    index: bpy.props.IntProperty(default=1, min=1, max=3)
+    name: bpy.props.StringProperty(name="Speaker Name", default="")
+
+    def invoke(self, context, event):
+        props = context.scene.subtitle_editor
+        self.name = _get_speaker_name(props, self.index)
+        return context.window_manager.invoke_props_dialog(self)
+
+    def execute(self, context):
+        props = context.scene.subtitle_editor
+        value = (self.name or "").strip()
+        if not value:
+            self.report({"WARNING"}, "Speaker name cannot be empty")
+            return {"CANCELLED"}
+
+        if self.index == 2:
+            old_name = props.speaker_name_2
+        elif self.index == 3:
+            old_name = props.speaker_name_3
+        else:
+            old_name = props.speaker_name_1
+
+        _set_speaker_name(props, self.index, value)
+        for item in context.scene.text_strip_items:
+            if item.speaker == old_name:
+                item.speaker = value
+        props.update_speaker_channels(context)
+        return {"FINISHED"}
 
 
 class SUBTITLE_OT_apply_style(Operator):
@@ -471,10 +811,19 @@ class SUBTITLE_OT_insert_line_breaks(Operator):
 classes = [
     SUBTITLE_OT_refresh_list,
     SUBTITLE_OT_select_strip,
+    SUBTITLE_OT_select_next_strip,
+    SUBTITLE_OT_select_previous_strip,
     SUBTITLE_OT_add_strip_at_cursor,
     SUBTITLE_OT_remove_selected_strip,
     SUBTITLE_OT_update_text,
+    SUBTITLE_OT_jump_to_selected_start,
+    SUBTITLE_OT_jump_to_selected_end,
+    SUBTITLE_OT_nudge_strip,
     SUBTITLE_OT_apply_style,
+    SUBTITLE_OT_apply_style_preset,
+    SUBTITLE_OT_save_style_preset,
+    SUBTITLE_OT_select_speaker_tab,
+    SUBTITLE_OT_rename_speaker,
     SUBTITLE_OT_copy_style_from_active,
     SUBTITLE_OT_insert_line_breaks,
 ]

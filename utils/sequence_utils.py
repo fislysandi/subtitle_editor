@@ -111,6 +111,21 @@ def refresh_list(context):
             item.frame_start = strip.frame_final_start
             item.frame_end = strip.frame_final_end
             item.channel = strip.channel
+            if not item.speaker:
+                prefix = None
+                if ":" in strip.name:
+                    head = strip.name.split(":", 1)[0].strip()
+                    if head in [
+                        props.speaker_name_1,
+                        props.speaker_name_2,
+                        props.speaker_name_3,
+                    ]:
+                        prefix = head
+
+                if prefix:
+                    item.speaker = prefix
+                else:
+                    item.speaker = props._speaker_label()
             item.is_selected = strip.select
 
 

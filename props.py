@@ -43,6 +43,12 @@ class TextStripItem(PropertyGroup):
         name="Channel", description="Sequencer channel", default=3, min=1, max=128
     )
 
+    speaker: StringProperty(
+        name="Speaker",
+        description="Speaker label for this subtitle",
+        default="Speaker 1",
+    )
+
     is_selected: BoolProperty(
         name="Selected", description="Whether this strip is selected", default=False
     )
@@ -83,12 +89,30 @@ class TextStripItem(PropertyGroup):
         if not target_strip:
             return
 
+        channel = target_strip.channel
+        prev_end = None
+        next_start = None
+
+        for strip in scene.sequence_editor.strips:
+            if strip.type != "TEXT" or strip == target_strip:
+                continue
+            if strip.channel != channel:
+                continue
+            if strip.frame_final_end <= target_strip.frame_final_start:
+                if prev_end is None or strip.frame_final_end > prev_end:
+                    prev_end = strip.frame_final_end
+            elif strip.frame_final_start >= target_strip.frame_final_end:
+                if next_start is None or strip.frame_final_start < next_start:
+                    next_start = strip.frame_final_start
+
         start = target_strip.frame_final_start
         end = target_strip.frame_final_end
 
         if source == "start":
             new_start = int(self.frame_start)
             new_start = min(new_start, end - 1)
+            if prev_end is not None:
+                new_start = max(new_start, prev_end)
             if new_start != start:
                 target_strip.frame_final_start = new_start
                 # keep tail anchored by reapplying previous end
@@ -96,6 +120,8 @@ class TextStripItem(PropertyGroup):
         elif source == "end":
             new_end = int(self.frame_end)
             new_end = max(new_end, start + 1)
+            if next_start is not None:
+                new_end = min(new_end, next_start)
             if new_end != end:
                 target_strip.frame_final_end = new_end
                 target_strip.frame_final_start = start
@@ -232,6 +258,7 @@ class SubtitleEditorProperties(PropertyGroup):
         default=2,
         min=1,
         max=128,
+        update=lambda self, context: self.update_speaker_channels(context),
     )
 
     subtitle_font_size: IntProperty(
@@ -357,8 +384,16 @@ class SubtitleEditorProperties(PropertyGroup):
         update=lambda self, context: self.update_text(context),
     )
 
+    speaker_warning: StringProperty(
+        name="Speaker Warning",
+        description="Speaker channel warning text",
+        default="",
+    )
+
     def update_text(self, context):
         """Update the selected text strip when text changes"""
+        if getattr(self, "_updating_text", False):
+            return
         if not context.scene:
             return
 
@@ -366,19 +401,287 @@ class SubtitleEditorProperties(PropertyGroup):
         index = getattr(context.scene, "text_strip_items_index", -1)
 
         if 0 <= index < len(items):
-            items[index].text = self.current_text
+            item = items[index]
+            speaker = item.speaker or self._speaker_label()
+            updated_text = self._apply_speaker_prefix(self.current_text, speaker)
+            if updated_text != self.current_text:
+                self._updating_text = True
+                self.current_text = updated_text
+                self._updating_text = False
+
+            item.text = updated_text
+            current_name = item.name
+            self._update_strip_name(
+                context.scene, item, updated_text, index + 1, current_name
+            )
 
             # Also update the actual strip in the sequencer
             try:
                 import bpy
 
                 for strip in context.scene.sequence_editor.strips:
-                    if strip.name == items[index].name:
+                    if strip.name == current_name:
                         if hasattr(strip, "text"):
-                            strip.text = self.current_text
+                            strip.text = updated_text
+                        strip.name = item.name
                         break
             except Exception:
                 pass
+
+        screen = getattr(context, "screen", None)
+        if screen:
+            for area in screen.areas:
+                if area.type == "SEQUENCE_EDITOR":
+                    area.tag_redraw()
+
+    def _speaker_names(self):
+        return [self.speaker_name_1, self.speaker_name_2, self.speaker_name_3]
+
+    def _speaker_label(self) -> str:
+        if self.speaker_index == 2:
+            return self.speaker_name_2
+        if self.speaker_index == 3:
+            return self.speaker_name_3
+        return self.speaker_name_1
+
+    def _apply_speaker_prefix(self, text: str, speaker: str) -> str:
+        if not self.show_speaker_prefix_in_text:
+            _, rest = self._strip_speaker_prefix(text.strip())
+            return rest if rest is not None else text.strip()
+
+        stripped = text.strip()
+        if not stripped:
+            return f"{speaker}:"
+
+        prefix, rest = self._strip_speaker_prefix(stripped)
+        if rest is None:
+            return f"{speaker}: {stripped}"
+        return f"{speaker}: {rest}"
+
+    def _strip_speaker_prefix(self, text: str):
+        if ":" not in text:
+            return None, None
+        prefix, rest = text.split(":", 1)
+        prefix = prefix.strip()
+        if prefix in self._speaker_names():
+            return prefix, rest.strip()
+        return None, None
+
+    def _strip_text_body(self, text: str) -> str:
+        prefix, rest = self._strip_speaker_prefix(text.strip())
+        if rest is None:
+            return text.strip()
+        return rest
+
+    def _unique_strip_name(self, scene, base: str, current_name: str) -> str:
+        if not scene.sequence_editor:
+            return base
+        existing = {
+            strip.name
+            for strip in scene.sequence_editor.strips
+            if strip.name != current_name
+        }
+        if base not in existing:
+            return base
+        index = 2
+        while f"{base} {index}" in existing:
+            index += 1
+        return f"{base} {index}"
+
+    def _update_strip_name(
+        self, scene, item, text: str, fallback_index: int, current_name: str
+    ) -> None:
+        speaker = item.speaker or self._speaker_label()
+        body = self._strip_text_body(text)
+        if body:
+            snippet = " ".join(body.split()[:4])
+            base = f"{speaker}: {snippet}"
+        else:
+            base = f"{speaker}: {fallback_index}"
+
+        new_name = self._unique_strip_name(scene, base, current_name)
+        item.name = new_name
+
+        if scene.sequence_editor:
+            for strip in scene.sequence_editor.strips:
+                if strip.name == current_name and strip.type == "TEXT":
+                    strip.name = new_name
+                    break
+
+    def update_speaker_tab(self, context):
+        if not context.scene:
+            return
+
+        label = self._speaker_label()
+        selected = []
+
+        if context.scene.sequence_editor:
+            for strip in context.scene.sequence_editor.strips:
+                if strip.select and strip.type == "TEXT":
+                    selected.append(strip.name)
+
+        if not selected:
+            index = context.scene.text_strip_items_index
+            items = context.scene.text_strip_items
+            if 0 <= index < len(items):
+                current_name = items[index].name
+                items[index].speaker = label
+                items[index].text = self._apply_speaker_prefix(items[index].text, label)
+                self._update_strip_name(
+                    context.scene,
+                    items[index],
+                    items[index].text,
+                    index + 1,
+                    current_name,
+                )
+                self._updating_text = True
+                self.current_text = items[index].text
+                self._updating_text = False
+            self.update_speaker_channels(context)
+            return
+
+        for item in context.scene.text_strip_items:
+            if item.name in selected:
+                current_name = item.name
+                item.speaker = label
+                item.text = self._apply_speaker_prefix(item.text, label)
+                idx = context.scene.text_strip_items.find(item.name)
+                self._update_strip_name(
+                    context.scene,
+                    item,
+                    item.text,
+                    (idx + 1 if idx >= 0 else 1),
+                    current_name,
+                )
+
+        active_index = context.scene.text_strip_items_index
+        if 0 <= active_index < len(context.scene.text_strip_items):
+            active_item = context.scene.text_strip_items[active_index]
+            self._updating_text = True
+            self.current_text = active_item.text
+            self._updating_text = False
+
+        self.update_speaker_channels(context)
+
+    def _set_channel_name(self, scene, channel: int, name: str) -> None:
+        if not scene.sequence_editor:
+            return
+        channels = scene.sequence_editor.channels
+        if 0 <= channel - 1 < len(channels):
+            channels[channel - 1].name = name
+
+    def sync_speaker_names_from_scene(self, scene) -> None:
+        if not scene or not scene.sequence_editor:
+            return
+
+        channels = scene.sequence_editor.channels
+        base = self.subtitle_channel
+
+        def _channel_name(channel_index: int):
+            if 0 <= channel_index - 1 < len(channels):
+                channel = channels[channel_index - 1]
+                return getattr(channel, "name", None)
+            return None
+
+        def _maybe_update(channel_index: int, current: str, setter):
+            channel_name = _channel_name(channel_index)
+            if not channel_name:
+                return
+            default_name = f"Channel {channel_index}"
+            if channel_name != default_name and channel_name != current:
+                setter(channel_name)
+
+        _maybe_update(
+            base, self.speaker_name_1, lambda v: setattr(self, "speaker_name_1", v)
+        )
+        _maybe_update(
+            base + 1, self.speaker_name_2, lambda v: setattr(self, "speaker_name_2", v)
+        )
+        _maybe_update(
+            base + 2, self.speaker_name_3, lambda v: setattr(self, "speaker_name_3", v)
+        )
+
+    def sync_speaker_names_from_channels(self, context) -> None:
+        scene = getattr(context, "scene", None)
+        self.sync_speaker_names_from_scene(scene)
+
+    def _reset_speaker_channel_names(self, scene, target_channels) -> None:
+        if not scene.sequence_editor:
+            return
+        channels = scene.sequence_editor.channels
+        speaker_names = set(self._speaker_names())
+        for index, channel in enumerate(channels, start=1):
+            if index in target_channels:
+                continue
+            if channel.name in speaker_names:
+                channel.name = f"Channel {index}"
+
+    def update_speaker_channels(self, context):
+        if not context.scene or not context.scene.sequence_editor:
+            return
+
+        self.sync_speaker_names_from_scene(context.scene)
+
+        mapping = {
+            self.speaker_name_1: self.subtitle_channel,
+            self.speaker_name_2: self.subtitle_channel + 1,
+            self.speaker_name_3: self.subtitle_channel + 2,
+        }
+
+        channel_to_speaker = {
+            self.subtitle_channel: self.speaker_name_1,
+            self.subtitle_channel + 1: self.speaker_name_2,
+            self.subtitle_channel + 2: self.speaker_name_3,
+        }
+
+        target_channels = set(mapping.values())
+
+        subtitle_names = {item.name for item in context.scene.text_strip_items}
+        warning = ""
+
+        for strip in context.scene.sequence_editor.strips:
+            if strip.channel in mapping.values():
+                if strip.name not in subtitle_names or strip.type != "TEXT":
+                    warning = (
+                        "Speaker channel conflict: rename or move existing strips "
+                        "before assigning speaker tracks."
+                    )
+                    break
+
+        self.speaker_warning = warning
+
+        for item in context.scene.text_strip_items:
+            if item.channel in channel_to_speaker and item.speaker not in mapping:
+                item.speaker = channel_to_speaker[item.channel]
+
+            channel = mapping.get(item.speaker, self.subtitle_channel)
+            item.channel = channel
+            current_name = item.name
+            for strip in context.scene.sequence_editor.strips:
+                if strip.name == item.name and strip.type == "TEXT":
+                    strip.channel = channel
+                    strip.text = self._apply_speaker_prefix(strip.text, item.speaker)
+                    item.text = strip.text
+                    idx = context.scene.text_strip_items.find(item.name)
+                    self._update_strip_name(
+                        context.scene,
+                        item,
+                        strip.text,
+                        (idx + 1 if idx >= 0 else 1),
+                        current_name,
+                    )
+                    break
+
+        self._reset_speaker_channel_names(context.scene, target_channels)
+        self._set_channel_name(
+            context.scene, self.subtitle_channel, self.speaker_name_1
+        )
+        self._set_channel_name(
+            context.scene, self.subtitle_channel + 1, self.speaker_name_2
+        )
+        self._set_channel_name(
+            context.scene, self.subtitle_channel + 2, self.speaker_name_3
+        )
 
     # Import/Export settings
     import_format: EnumProperty(
@@ -532,6 +835,14 @@ class SubtitleEditorProperties(PropertyGroup):
         max=200,
     )
 
+    nudge_step: IntProperty(
+        name="Nudge Step",
+        description="Frames to nudge subtitle in/out",
+        default=1,
+        min=1,
+        max=100,
+    )
+
     text_color: bpy.props.FloatVectorProperty(
         name="Text Color",
         description="Default text color",
@@ -550,4 +861,200 @@ class SubtitleEditorProperties(PropertyGroup):
         min=0.0,
         max=1.0,
         default=(0.0, 0.0, 0.0),
+    )
+
+    speaker_index: IntProperty(
+        name="Speaker",
+        description="Active speaker slot (placeholder)",
+        default=1,
+        min=1,
+        max=3,
+        update=lambda self, context: self.update_speaker_tab(context),
+    )
+
+    speaker_name_1: StringProperty(
+        name="Speaker 1 Name",
+        description="Speaker tab label",
+        default="Subtitle_Studio",
+    )
+
+    speaker_name_2: StringProperty(
+        name="Speaker 2 Name",
+        description="Speaker tab label",
+        default="Speaker 2",
+    )
+
+    speaker_name_3: StringProperty(
+        name="Speaker 3 Name",
+        description="Speaker tab label",
+        default="Speaker 3",
+    )
+
+    show_speaker_prefix_in_text: BoolProperty(
+        name="Prefix in Text",
+        description="Show speaker prefix in subtitle text",
+        default=False,
+        update=lambda self, context: self.update_text(context),
+    )
+
+    preset_1_name: StringProperty(
+        name="Preset 1",
+        description="Preset slot name",
+        default="Default",
+    )
+
+    preset_1_font_size: IntProperty(
+        name="Preset 1 Font Size",
+        description="Preset font size",
+        default=24,
+        min=8,
+        max=200,
+    )
+
+    preset_1_text_color: bpy.props.FloatVectorProperty(
+        name="Preset 1 Text Color",
+        description="Preset text color",
+        subtype="COLOR",
+        size=3,
+        min=0.0,
+        max=1.0,
+        default=(1.0, 1.0, 1.0),
+    )
+
+    preset_1_shadow_color: bpy.props.FloatVectorProperty(
+        name="Preset 1 Shadow Color",
+        description="Preset shadow color",
+        subtype="COLOR",
+        size=3,
+        min=0.0,
+        max=1.0,
+        default=(0.0, 0.0, 0.0),
+    )
+
+    preset_1_v_align: EnumProperty(
+        name="Preset 1 V Align",
+        description="Preset vertical alignment",
+        items=[
+            ("TOP", "Top", "Align to top"),
+            ("CENTER", "Center", "Align to center"),
+            ("BOTTOM", "Bottom", "Align to bottom"),
+        ],
+        default="BOTTOM",
+    )
+
+    preset_1_wrap_width: FloatProperty(
+        name="Preset 1 Wrap Width",
+        description="Preset wrap width",
+        default=0.7,
+        min=0.0,
+        max=1.0,
+        subtype="FACTOR",
+    )
+
+    preset_2_name: StringProperty(
+        name="Preset 2",
+        description="Preset slot name",
+        default="Lower Third",
+    )
+
+    preset_2_font_size: IntProperty(
+        name="Preset 2 Font Size",
+        description="Preset font size",
+        default=28,
+        min=8,
+        max=200,
+    )
+
+    preset_2_text_color: bpy.props.FloatVectorProperty(
+        name="Preset 2 Text Color",
+        description="Preset text color",
+        subtype="COLOR",
+        size=3,
+        min=0.0,
+        max=1.0,
+        default=(1.0, 1.0, 1.0),
+    )
+
+    preset_2_shadow_color: bpy.props.FloatVectorProperty(
+        name="Preset 2 Shadow Color",
+        description="Preset shadow color",
+        subtype="COLOR",
+        size=3,
+        min=0.0,
+        max=1.0,
+        default=(0.0, 0.0, 0.0),
+    )
+
+    preset_2_v_align: EnumProperty(
+        name="Preset 2 V Align",
+        description="Preset vertical alignment",
+        items=[
+            ("TOP", "Top", "Align to top"),
+            ("CENTER", "Center", "Align to center"),
+            ("BOTTOM", "Bottom", "Align to bottom"),
+        ],
+        default="BOTTOM",
+    )
+
+    preset_2_wrap_width: FloatProperty(
+        name="Preset 2 Wrap Width",
+        description="Preset wrap width",
+        default=0.7,
+        min=0.0,
+        max=1.0,
+        subtype="FACTOR",
+    )
+
+    preset_3_name: StringProperty(
+        name="Preset 3",
+        description="Preset slot name",
+        default="Large",
+    )
+
+    preset_3_font_size: IntProperty(
+        name="Preset 3 Font Size",
+        description="Preset font size",
+        default=40,
+        min=8,
+        max=200,
+    )
+
+    preset_3_text_color: bpy.props.FloatVectorProperty(
+        name="Preset 3 Text Color",
+        description="Preset text color",
+        subtype="COLOR",
+        size=3,
+        min=0.0,
+        max=1.0,
+        default=(1.0, 1.0, 1.0),
+    )
+
+    preset_3_shadow_color: bpy.props.FloatVectorProperty(
+        name="Preset 3 Shadow Color",
+        description="Preset shadow color",
+        subtype="COLOR",
+        size=3,
+        min=0.0,
+        max=1.0,
+        default=(0.0, 0.0, 0.0),
+    )
+
+    preset_3_v_align: EnumProperty(
+        name="Preset 3 V Align",
+        description="Preset vertical alignment",
+        items=[
+            ("TOP", "Top", "Align to top"),
+            ("CENTER", "Center", "Align to center"),
+            ("BOTTOM", "Bottom", "Align to bottom"),
+        ],
+        default="BOTTOM",
+    )
+
+    preset_3_wrap_width: FloatProperty(
+        name="Preset 3 Wrap Width",
+        description="Preset wrap width",
+        default=0.7,
+        min=0.0,
+        max=1.0,
+        subtype="FACTOR",
     )
