@@ -373,6 +373,7 @@ cat PROJECT_STATE.md
 2. **Understand structure** - Files are in `panels/`, `operators/`, `core/`, etc.
 3. **Framework rules** - Uses auto_load, no manual registration needed
 4. **Test frequently** - Use `uv run test subtitle_editor` for hot-reload
+5. **Auto-commit policy** - Always create a git commit after completing a task, with a clear message describing what changed
 5. **Load context** - Automatically point the agent to this path every time by including the configuration context files in your next call:
 
 ```
