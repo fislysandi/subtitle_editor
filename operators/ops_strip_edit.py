@@ -558,6 +558,10 @@ class SUBTITLE_OT_adjust_speaker_count(Operator):
     name: bpy.props.StringProperty(name="Speaker Name", default="")
 
     def invoke(self, context, event):
+        print(
+            f"[Subtitle Studio] adjust_speaker_count invoke direction={self.direction}",
+            flush=True,
+        )
         if self.direction > 0:
             props = getattr(context.scene, "subtitle_editor", None)
             if not props:
@@ -576,6 +580,10 @@ class SUBTITLE_OT_adjust_speaker_count(Operator):
         layout.prop(self, "name", text="Speaker Name")
 
     def execute(self, context):
+        print(
+            f"[Subtitle Studio] adjust_speaker_count execute direction={self.direction} name='{self.name}'",
+            flush=True,
+        )
         scene = context.scene
         props = getattr(scene, "subtitle_editor", None)
         if not props:
@@ -588,6 +596,10 @@ class SUBTITLE_OT_adjust_speaker_count(Operator):
         if new_count == props.speaker_count:
             return {"FINISHED"}
 
+        print(
+            f"[Subtitle Studio] speaker_count {props.speaker_count} -> {new_count}",
+            flush=True,
+        )
         props.speaker_count = new_count
         if props.speaker_index > new_count:
             props.speaker_index = new_count
@@ -602,6 +614,10 @@ class SUBTITLE_OT_adjust_speaker_count(Operator):
             elif new_count == 3:
                 props.speaker_name_3 = value
 
+        print(
+            "[Subtitle Studio] update_speaker_tab/update_speaker_channels/refresh_list",
+            flush=True,
+        )
         props.update_speaker_tab(context)
         props.update_speaker_channels(context)
         sequence_utils.refresh_list(context)
