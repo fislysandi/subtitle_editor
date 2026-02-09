@@ -1,10 +1,16 @@
 """
 UI Panels for Subtitle Studio
-Simplified version matching upstream layout but using existing operators
 """
 
 import bpy
 from bpy.types import Panel
+
+from .main_panel_sections import (
+    draw_edit_section,
+    draw_list_section,
+    draw_speaker_header,
+    _log_panel_error,
+)
 
 
 class SEQUENCER_PT_panel(Panel):
@@ -18,162 +24,21 @@ class SEQUENCER_PT_panel(Panel):
 
     def draw(self, context):
         layout = self.layout
-        scene = context.scene
 
-        tab_row = layout.row(align=True)
-        tab_split = tab_row.split(factor=0.95)
-        tab_tabs = tab_split.row(align=True)
-        tab_tabs.operator_context = "INVOKE_DEFAULT"
+        try:
+            draw_speaker_header(layout, context)
+        except Exception as exc:
+            _log_panel_error("SEQUENCER_PT_panel", "speaker_header", exc)
 
-        op = tab_tabs.operator(
-            "subtitle.select_speaker_tab",
-            text=scene.subtitle_editor.speaker_name_1,
-            depress=scene.subtitle_editor.speaker_index == 1,
-        )
-        op.index = 1
+        try:
+            draw_list_section(layout, context)
+        except Exception as exc:
+            _log_panel_error("SEQUENCER_PT_panel", "list_section", exc)
 
-        op = tab_tabs.operator(
-            "subtitle.select_speaker_tab",
-            text=scene.subtitle_editor.speaker_name_2,
-            depress=scene.subtitle_editor.speaker_index == 2,
-        )
-        op.index = 2
-
-        op = tab_tabs.operator(
-            "subtitle.select_speaker_tab",
-            text=scene.subtitle_editor.speaker_name_3,
-            depress=scene.subtitle_editor.speaker_index == 3,
-        )
-        op.index = 3
-
-        tab_split.column()
-
-        if scene.subtitle_editor.speaker_warning:
-            warn_row = layout.row()
-            warn_row.alert = True
-            warn_row.label(text=scene.subtitle_editor.speaker_warning, icon="ERROR")
-
-        channel_row = layout.row()
-        channel_row.label(
-            text=(
-                f"Ch {scene.subtitle_editor.subtitle_channel}: {scene.subtitle_editor.speaker_name_1}"
-                f"  |  Ch {scene.subtitle_editor.subtitle_channel + 1}: {scene.subtitle_editor.speaker_name_2}"
-                f"  |  Ch {scene.subtitle_editor.subtitle_channel + 2}: {scene.subtitle_editor.speaker_name_3}"
-            )
-        )
-
-        row = layout.row()
-        col = row.column()
-        col.template_list(
-            "SEQUENCER_UL_List",
-            "",
-            context.scene,
-            "text_strip_items",
-            context.scene,
-            "text_strip_items_index",
-            rows=10,
-        )
-
-        # Button column
-        row = row.column(align=True)
-
-        # Refresh
-        row.operator("subtitle.refresh_list", text="", icon="FILE_REFRESH")
-        row.separator()
-
-        # Import/Export
-        row.operator("subtitle.import_subtitles", text="", icon="IMPORT")
-        row.operator("subtitle.export_subtitles", text="", icon="EXPORT")
-        row.separator()
-
-        row.operator("subtitle.add_strip_at_cursor", text="", icon="ADD")
-        row.operator("subtitle.remove_selected_strip", text="", icon="REMOVE")
-        row.separator()
-        row.operator("subtitle.select_next_strip", text="", icon="TRIA_UP")
-        row.operator("subtitle.select_previous_strip", text="", icon="TRIA_DOWN")
-        row.separator()
-
-        # Edit section (moved from separate panel)
-        layout.separator()
-
-        # Edit selected
-        if scene.text_strip_items_index >= 0 and scene.text_strip_items:
-            item = scene.text_strip_items[scene.text_strip_items_index]
-            col = layout.column()
-
-            # Text editing box
-            box = col.box()
-            box.label(text=f"Editing: {item.name}")
-            box.prop(scene.subtitle_editor, "current_text")
-
-            # Subtitle editing tools
-            box = col.box()
-            box.label(text="Subtitle Editing Tools")
-            row = box.row(align=True)
-            row.prop(scene.subtitle_editor, "nudge_step", text="Step")
-            row.prop(
-                scene.subtitle_editor,
-                "show_speaker_prefix_in_text",
-                text="Prefix in Text",
-            )
-
-            row = box.row(align=True)
-            row.operator(
-                "subtitle.jump_to_selected_start",
-                text="Start",
-                icon="TIME",
-            )
-            op = row.operator("subtitle.nudge_strip", text="-", icon="TRIA_LEFT")
-            op.edge = "START"
-            op.direction = -1
-            op = row.operator("subtitle.nudge_strip", text="+", icon="TRIA_RIGHT")
-            op.edge = "START"
-            op.direction = 1
-
-            row = box.row(align=True)
-            row.operator(
-                "subtitle.jump_to_selected_end",
-                text="End",
-                icon="TIME",
-            )
-            op = row.operator("subtitle.nudge_strip", text="-", icon="TRIA_LEFT")
-            op.edge = "END"
-            op.direction = -1
-            op = row.operator("subtitle.nudge_strip", text="+", icon="TRIA_RIGHT")
-            op.edge = "END"
-            op.direction = 1
-
-            # Timing and position
-            row = box.row(align=True)
-            row.prop(item, "frame_start", text="Start")
-            row.prop(item, "frame_end", text="End")
-            box.prop(scene.subtitle_editor, "speaker_index", text="Speaker")
-
-            # Style
-            box.prop(scene.subtitle_editor, "font_size")
-            row = box.row(align=True)
-            row.prop(scene.subtitle_editor, "text_color")
-            row.prop(scene.subtitle_editor, "shadow_color")
-            row = box.row(align=True)
-            row.prop(scene.subtitle_editor, "v_align")
-            row.prop(scene.subtitle_editor, "wrap_width")
-
-            # Line breaks
-            box.prop(scene.subtitle_editor, "max_chars_per_line")
-            box.operator(
-                "subtitle.insert_line_breaks", text="Insert Line Breaks", icon="TEXT"
-            )
-        else:
-            box = layout.box()
-            box.label(text="Select a subtitle from the list to edit")
-
-        style_box = layout.box()
-        style_box.label(text="Batch Styling")
-        style_box.operator(
-            "subtitle.copy_style_from_active",
-            text="Copy Active Style to Selected",
-            icon="BRUSH_DATA",
-        )
+        try:
+            draw_edit_section(layout, context)
+        except Exception as exc:
+            _log_panel_error("SEQUENCER_PT_panel", "edit_section", exc)
 
 
 class SEQUENCER_PT_whisper_panel(Panel):
