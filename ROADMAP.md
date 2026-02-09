@@ -49,7 +49,23 @@
 
 ---
 
-## Milestone 2 — Core Subtitle Strip Engine (VSE Correctness)
+
+## Milestone 2 — Speaker Support & Compound Tracks
+**Outcome:** Each speaker has a dedicated track inside the shared subtitle compound strip, and the UI exposes speaker metadata so editors can reassign subtitles without manual track juggling.
+
+- [ ] Recognize speakers via transcript prefixes such as `John:`/`Sarah:` when importing subtitles
+- [ ] Rename the strip metadata (currently `channel`) to `speaker` so code and JSON references reflect the new abstraction
+- [ ] Add a speaker slider in the main panel that shows the active speaker and moves selected strips into that speaker’s track inside the compound strip
+- [ ] Ensure the compound strip follows `scene.subtitle_editor.subtitle_channel` so enabling speaker mode automatically repositions the shared clip
+- [ ] Keep subtitle style props (`v_align`, `wrap_width`, `subtitle_font_size`, `subtitle_channel`) surfaced in the main panel for quick tweaks
+- [ ] Provide an import option to toggle speaker-aware track assignment (default: simple single-track workflow)
+
+**Acceptance criteria**
+- Selecting one or more strips and dragging the speaker slider immediately migrates them to the compound strip’s speaker track while updating the slider label.
+
+---
+
+## Milestone 3 — Core Subtitle Strip Engine (VSE Correctness)
 **Outcome:** Subtitles place correctly in time and track/channel, every time.
 
 - [ ] Implement/verify timestamp→frame conversion:
@@ -72,7 +88,7 @@
 
 ---
 
-## Milestone 3 — Import/Export Reliability
+## Milestone 4 — Import/Export Reliability
 **Outcome:** Subtitle Studio is dependable for real workflows.
 
 - [ ] Import SRT reliably (encoding, multi-line cues, edge cases)
@@ -89,7 +105,7 @@
 
 ---
 
-## Milestone 4 — Non-Blocking Downloads + Status Bar Progress (UX)
+## Milestone 5 — Non-Blocking Downloads + Status Bar Progress (UX)
 **Outcome:** Downloads never freeze Blender; progress appears like render/bake.
 
 - [ ] Download manager (pure python) supports progress callback:
@@ -111,7 +127,7 @@
 
 ---
 
-## Milestone 5 — Architecture for TTS Voicing (Design + Foundations)
+## Milestone 6 — Architecture for TTS Voicing (Design + Foundations)
 **Outcome:** Subtitle Studio is ready to add TTS without rewriting everything.
 
 - [ ] Define a **“Cue model”** that is independent of VSE strips:
@@ -130,7 +146,7 @@
 
 ---
 
-## Milestone 6 — TTS Voicing MVP (Future)
+## Milestone 7 — TTS Voicing MVP (Future)
 **Outcome:** Generate voice audio aligned to subtitles.
 
 - [ ] Choose initial TTS backend (local or API)
@@ -155,5 +171,5 @@
 
 ## Immediate Next Tasks (Pick 3)
 - [ ] (P0) Polish panel layout + editing workflow (Milestone 1)
-- [ ] (P0) Lock down frame math + channel placement (Milestone 2)
-- [ ] (P1) Non-blocking download operator + status-bar progress (Milestone 4)
+- [ ] (P0) Build speaker+compound workflow and slider UI (Milestone 2)
+- [ ] (P1) Lock down frame math + channel placement (Milestone 3)
