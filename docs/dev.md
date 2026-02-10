@@ -1,6 +1,6 @@
 # Subtitle Studio - Development Workflow
 
-## Overview
+**Last Updated:** 2026-02-10
 
 This guide captures the local iteration, testing, and packaging workflow for Subtitle Studio while keeping Blender's threading and auto-loading patterns intact.
 
@@ -47,3 +47,12 @@ Consult `docs/whisper-config.md` before tweaking default beam sizes, VAD thresho
 - Reload the add-on via Blender's scripting console between edits if panels refuse to redraw; modal operators rely on `area.tag_redraw()` inside scheduled timers.
 - Restart Blender when UI elements lag or hang, as event handlers are tied to `bpy.app.timers` for long-running downloads/transcriptions.
 - Watch the console/logs for thread-safe updates and avoid touching props from background threads (the pattern is documented in `context/project-intelligence/technical-domain.md`).
+
+## Related
+
+- [README.md](../README.md) - Project overview and installation
+- [docs/dependencies.md](dependencies.md) - Dependency management details
+- [docs/whisper-config.md](whisper-config.md) - Model configuration reference
+- [docs/user-guide.md](user-guide.md) - User documentation
+- [CONTRIBUTING.md](../CONTRIBUTING.md) - Detailed developer guide with code standards
+- [docs/troubleshooting.md](troubleshooting.md) - Common issues and solutions

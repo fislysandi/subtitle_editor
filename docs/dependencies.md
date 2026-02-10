@@ -1,5 +1,7 @@
 # Subtitle Studio - Dependency Management (UV First)
 
+**Last Updated:** 2026-02-10
+
 ## Overview
 
 Subtitle Studio no longer ships a bundled `libs/` folder. Dependencies are managed with UV and installed into Blender's Python at runtime, with pip fallback when UV is unavailable.
@@ -63,5 +65,8 @@ dependencies = [
 
 ## Related
 
-- `README.md` (installation and quick start)
-- `docs/dev.md` (developer workflow)
+- [README.md](../README.md) - Installation and quick start
+- [docs/dev.md](dev.md) - Developer workflow
+- [CONTRIBUTING.md](../CONTRIBUTING.md) - Detailed developer guide with code standards
+- [docs/troubleshooting.md](troubleshooting.md) - Dependency-related troubleshooting
+- [docs/whisper-config.md](whisper-config.md) - Model configuration reference

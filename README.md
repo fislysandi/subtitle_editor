@@ -1,73 +1,254 @@
 # Subtitle Studio
 
-Subtitle Studio is a Blender VSE add-on that packages Faster Whisper transcription, subtitle editing, and export tooling so you can keep the entire workflow inside Blender while staying compliant with Blender 5.0+ UI paradigms.
+**Last Updated:** 2026-02-10
+
+[![Blender](https://img.shields.io/badge/Blender-4.5%2B-orange)](https://www.blender.org/)
+[![License](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.11-blue)](https://www.python.org/)
+
+AI-powered subtitle transcription and editing for Blender's Video Sequence Editor.
+
+---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Documentation](#documentation)
+- [Screenshots](#screenshots)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [Changelog](#changelog)
+- [License](#license)
+
+---
 
 ## Overview
 
-- **Purpose**: Bring AI transcription, subtitle editing, and multi-format export to the Video Sequence Editor with Blender-native controls.
-- **Why it matters**: Run Whisper models offline, edit captions visually, and ship polished subtitles without toggling between Blender and external tools.
+**Subtitle Studio** brings AI transcription, subtitle editing, and multi-format export directly into Blender's Video Sequence Editor (VSE). Keep your entire workflow inside Blender while staying compliant with Blender 5.0+ UI paradigms.
 
-## Requirements
+### Why Subtitle Studio?
 
-- Blender 4.5 LTS / 5.0+ (whichever matches your release channel)
-- Python 3.11 (bundled inside Blender)
-- ~500 MB disk space for Faster Whisper/ONNX artifacts when bundling dependencies
+- **All-in-one workflow** - No need to switch between Blender and external tools
+- **Offline AI transcription** - Run Whisper models locally without internet (after download)
+- **Native Blender integration** - VSE-centric editing with frame-accurate controls
+- **Multi-language support** - 99+ languages with auto-detection
 
-## Installation
-
-1. Download the latest release ZIP.
-2. In Blender: `Edit → Preferences → Add-ons → Install`, then activate `Subtitle Studio` from the list.
-3. Open the add-on Preferences and run **Install Dependencies** (uses UV when available, pip fallback). See `docs/dependencies.md` for the UV-first workflow and troubleshooting tips.
-
-## Quick Start
-
-1. Open Blender's Video Sequence Editor and add the strip you want to transcribe.
-2. Open the Subtitle Studio sidebar panel (N-panel → Subtitle Studio).
-3. Click **Transcribe** to run Faster Whisper on the active strip (status appears in the panel).
-4. Fine-tune timing or text directly in the subtitle list view and use Blender tools to align strips.
-5. Export to SRT/VTT/ASS/SSA when the sequence is ready.
-
-## Usage
-
-- Enable `Subtitle Studio` under `Edit → Preferences → Add-ons`.
-- In the VSE sidebar panel, choose a model variant, configure VAD/beam settings, and trigger transcription.
-- Use the list view to edit cues, pin strips, or push updated subtitles back into the pool.
-- Export subtitles from the same panel or via the `Subtitle Studio → Export` operator when ready.
+---
 
 ## Features
 
-- **AI-Powered Transcription**: Offline Faster Whisper inference with beam/timer controls.
-- **Multi-Language Support**: Dozens of languages plus auto-detect fallbacks.
-- **VSE-Centric Editing**: Visual, frame-accurate subtitle edits inside Blender.
-- **Flexible Imports/Exports**: Support for SRT, VTT, ASS, SSA.
-- **Offline-Ready**: Bundle faster-whisper, pysubs2, onnxruntime, and friends for air-gapped installs.
-- **Blender-Compatible Design**: Thread-safe modal operators, property groups, and iconography tuned for Blender 5.x.
+| Feature | Description |
+|---------|-------------|
+| **AI Transcription** | Offline Faster Whisper inference with configurable models |
+| **Multi-Language** | Auto-detect or force specific languages |
+| **VSE Integration** | Frame-accurate editing inside Blender's sequencer |
+| **Multi-Speaker** | Track multiple speakers on separate channels |
+| **Import/Export** | SRT, VTT, ASS, SSA format support |
+| **Style Presets** | Font, color, positioning controls |
+| **Offline Ready** | Bundle dependencies for air-gapped installs |
 
-## Dependency Management
+### Supported Models
 
-Subtitle Studio no longer ships a `libs/` folder. Dependencies are resolved through UV and installed into Blender's Python at runtime (with pip as fallback). See `docs/dependencies.md` for the UV workflow, lockfile strategy, and how the add-on uses the built-in installer.
+| Model | Size | Speed | Best For |
+|-------|------|-------|----------|
+| `tiny` | 39 MB | Very Fast | Testing |
+| `base` | 74 MB | Fast | Quick drafts |
+| `small` | 244 MB | Moderate | Balanced workflow |
+| `medium` | 769 MB | Slow | High accuracy |
+| `large-v3` | 1.5 GB | Very Slow | Best quality |
 
-## Faster Whisper Configuration Reference
+---
 
-Use `docs/whisper-config.md` to compare models (`tiny` vs `large-v3`), tune beam/VAD settings, and read the expected output structure. The document also highlights memory/speed trade-offs and CPU-only knobs for Blender builds.
+## Requirements
+
+- **Blender** 4.5 LTS or 5.0+
+- **Python** 3.11 (bundled with Blender)
+- **Disk Space** ~500 MB for dependencies
+- **GPU** (Optional) CUDA/ROCm/Metal for faster transcription
+
+---
+
+## Installation
+
+### 1. Download
+
+Download the latest release ZIP from the [releases page](../../releases).
+
+### 2. Install in Blender
+
+```
+Edit → Preferences → Add-ons → Install...
+Select subtitle_studio.zip
+Enable ✅ Subtitle Studio
+```
+
+### 3. Install Dependencies
+
+```
+Click arrow to expand Subtitle Studio in add-ons list
+Click Install Dependencies button
+Wait for completion (2-5 minutes)
+```
+
+### 4. Install PyTorch (GPU Support)
+
+```
+In Subtitle Studio panel:
+Select your GPU backend (CUDA/Metal/CPU)
+Click Install PyTorch
+```
+
+**See [docs/dependencies.md](docs/dependencies.md)** for detailed dependency management and UV workflow.
+
+---
+
+## Quick Start
+
+### Transcribe Audio to Subtitles
+
+```
+1. Open Video Sequence Editor
+2. Add your audio/video strip
+3. Select the strip
+4. Open Sidebar (N key) → Subtitle Studio tab
+5. Click Transcribe Audio
+6. Edit subtitles in the list view
+```
+
+### Import Existing Subtitles
+
+```
+1. Click Import button in subtitle list
+2. Select SRT/VTT/ASS file
+3. Subtitles appear on designated channel
+```
+
+### Export Subtitles
+
+```
+1. Click Export button
+2. Choose format (SRT/VTT/ASS)
+3. Save file
+```
+
+**See [docs/user-guide.md](docs/user-guide.md)** for the complete tutorial.
+
+---
 
 ## Documentation
 
-- `docs/dev.md` – local development workflow, UV commands, and Blender iteration tips.
-- `docs/dependencies.md` – how to download, bundle, and ship offline dependencies.
-- `docs/whisper-config.md` – Faster Whisper model and parameter guidance.
-- `docs/changelog.md` – release history and notable changes.
+| Document | Description |
+|----------|-------------|
+| [docs/user-guide.md](docs/user-guide.md) | Complete user tutorial with examples |
+| [docs/whisper-config.md](docs/whisper-config.md) | Model selection & parameter reference |
+| [docs/dependencies.md](docs/dependencies.md) | Dependency management & UV workflow |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Common issues & solutions |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Developer guide & code standards |
+| [docs/dev.md](docs/dev.md) | Development workflow & Blender iteration |
+
+---
+
+## Screenshots
+
+*Screenshots will be added in a future update. See [ROADMAP.md](ROADMAP.md) Milestone 1.*
+
+<!-- 
+TODO: Add screenshots showing:
+- Main panel in VSE sidebar
+- Transcription in progress
+- Subtitle list view
+- Style editing section
+-->
+
+---
 
 ## Troubleshooting
 
-- Add-on not visible: Verify the ZIP is installed and enabled, then restart Blender. If you used a brand-new build, open the console to confirm the module path is correct.
-- Model download fails: Use the Preferences UI to install dependencies and models; confirm Blender can reach the package index and model storage endpoints.
-- No subtitles created: Confirm a strip is selected, the scene timeline is playing/active, and the operator log shows `segments` results.
+### Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| Add-on not visible | Restart Blender after installation |
+| Dependencies fail | Check internet; try UV fallback in preferences |
+| Model download fails | Set Hugging Face token in preferences |
+| No subtitles created | Select audio/video strip first |
+
+**See [docs/troubleshooting.md](docs/troubleshooting.md)** for detailed solutions.
+
+---
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
+
+- Development setup
+- Code standards (Google-style docstrings, type hints)
+- Blender 5.0 patterns (modal operators, thread safety)
+- Testing guidelines
+- Pull request process
+
+### Quick Commands
+
+```bash
+# Run tests
+uv run test subtitle_editor
+
+# Build release
+uv run release subtitle_editor
+
+# Sync dependencies
+uv sync
+```
+
+---
 
 ## Changelog
 
-See `docs/changelog.md` for the release log, including the current 0.5.1 snapshot and any upcoming updates.
+### [1.0.0] - 2026-02-10
+
+#### Added
+- Complete documentation suite (user guide, troubleshooting, contributing)
+- Cross-linked all documentation
+- UV-first dependency management
+- Blender 5.0 modal operator patterns
+- Thread-safe transcription with progress tracking
+
+#### Changed
+- Migrated to Blender Addon Framework
+- Reorganized documentation structure
+
+### [0.5.1] - 2026-02-08
+
+#### Added
+- UV-first dependency management
+- Faster Whisper tuning references
+- Development workflow documentation
+
+**See [CHANGELOG.md](CHANGELOG.md)** for full history.
+
+---
 
 ## License
 
-GPL-3.0-or-later. See `LICENSE` for full terms.
+GPL-3.0-or-later. See [LICENSE](LICENSE) for full terms.
+
+---
+
+## Acknowledgments
+
+- Original concept by [tin2tin/Subtitle_Editor](https://github.com/tin2tin/Subtitle_Editor)
+- Powered by [Faster Whisper](https://github.com/SYSTRAN/faster-whisper)
+- Built with [Blender](https://www.blender.org/)
+
+---
+
+## Related
+
+- [docs/user-guide.md](docs/user-guide.md) - Complete user tutorial
+- [docs/whisper-config.md](docs/whisper-config.md) - Model configuration
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Developer guide
+- [ROADMAP.md](ROADMAP.md) - Future plans & milestones

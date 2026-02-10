@@ -1,5 +1,7 @@
 # Subtitle Studio - Faster Whisper Configuration
 
+**Last Updated:** 2026-02-10
+
 ## Overview
 
 Faster Whisper offers configurable model sizes and decoding knobs. This reference helps you pick the right trade-off for accuracy, speed, and memory inside Blender's constrained environment.
@@ -63,6 +65,9 @@ Process segments with a simple loop to convert seconds to frames or milliseconds
 Most ISO codes are supported (`en`, `zh`, `fr`, `de`, `es`, `it`, `ja`, `ko`, `pt`, `ru`, `ar`, `hi`). Omit the `language` parameter to let the model auto-detect.
 
 ## Related
-- `README.md` (usage and quick start)
-- `docs/dev.md` (development workflow)
-- `docs/dependencies.md` (bundled libs reference)
+
+- [README.md](../README.md) - Usage and quick start
+- [docs/dev.md](dev.md) - Development workflow
+- [docs/dependencies.md](dependencies.md) - Dependency management
+- [docs/user-guide.md](user-guide.md) - Complete transcription tutorial
+- [CONTRIBUTING.md](../CONTRIBUTING.md) - Developer guide with code standards
