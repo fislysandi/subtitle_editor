@@ -33,7 +33,6 @@ class SUBTITLE_OT_import_subtitles(Operator, ImportHelper):
             fps = scene.render.fps / (scene.render.fps_base or 1.0)
 
             for entry in entries:
-                # Calculate absolute frame positions from subtitle timestamps
                 frame_start = int(entry.start * fps)
                 frame_end = int(entry.end * fps)
 
@@ -47,14 +46,13 @@ class SUBTITLE_OT_import_subtitles(Operator, ImportHelper):
                 )
 
                 if strip:
-                    # Add to UI list using actual strip frame values
-                    # This ensures the UI reflects the true strip positions
+                    # Add to UI list
                     item = scene.text_strip_items.add()
                     item.name = strip.name
                     item.text = entry.text
-                    item.frame_start = strip.frame_final_start
-                    item.frame_end = strip.frame_final_end
-                    item.channel = strip.channel
+                    item.frame_start = frame_start
+                    item.frame_end = frame_end
+                    item.channel = channel
 
             self.report({"INFO"}, f"Imported {len(entries)} subtitles")
             return {"FINISHED"}
