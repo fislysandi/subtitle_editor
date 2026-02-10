@@ -955,6 +955,19 @@ class SubtitleEditorProperties(PropertyGroup):
         default="",
     )
 
+    # PyTorch backend detection
+    pytorch_backend_detected: StringProperty(
+        name="PyTorch Backend Detected",
+        description="The actual PyTorch backend detected (cpu, cuda, mps, etc.)",
+        default="",
+    )
+
+    pytorch_backend_mismatch: BoolProperty(
+        name="PyTorch Backend Mismatch",
+        description="Whether installed PyTorch doesn't match selected version",
+        default=False,
+    )
+
     # Model download status
     is_downloading_model: BoolProperty(
         name="Downloading Model",

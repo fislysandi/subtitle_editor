@@ -254,31 +254,96 @@ class SUBTITLE_OT_check_gpu(Operator):
             import torch
 
             gpu_info = []
+            backend_detected = "cpu"  # Default to CPU
 
             # Check for NVIDIA CUDA
             if torch.cuda.is_available():
                 props.gpu_detected = True
                 gpu_name = torch.cuda.get_device_name(0)
                 gpu_info.append(f"NVIDIA: {gpu_name}")
+                backend_detected = "cuda"
+
+                # Try to determine CUDA version
+                try:
+                    cuda_version = torch.version.cuda
+                    if cuda_version:
+                        # Map CUDA version to our naming
+                        major_minor = cuda_version.split(".")[:2]
+                        if major_minor == ["11", "8"]:
+                            backend_detected = "cu118"
+                        elif major_minor == ["12", "1"]:
+                            backend_detected = "cu121"
+                        elif major_minor == ["12", "4"]:
+                            backend_detected = "cu124"
+                except:
+                    pass
 
             # Check for Apple Metal (MPS)
-            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                 props.gpu_detected = True
                 gpu_info.append("Apple Silicon (MPS)")
+                backend_detected = "mps"
 
             # Check for Intel XPU
-            if hasattr(torch, "xpu") and torch.xpu.is_available():
+            elif hasattr(torch, "xpu") and torch.xpu.is_available():
                 props.gpu_detected = True
                 gpu_info.append("Intel Arc/XPU")
+                backend_detected = "xpu"
+
+            else:
+                props.gpu_detected = False
+
+            # Store detected backend
+            props.pytorch_backend_detected = backend_detected
+
+            # Check for mismatch with selected version
+            selected_version = props.pytorch_version
+            if selected_version != "cpu":
+                # If user selected GPU but we detected CPU, it's a mismatch
+                if backend_detected == "cpu":
+                    props.pytorch_backend_mismatch = True
+                    self.report(
+                        {"WARNING"},
+                        f"PyTorch backend mismatch: Selected {selected_version} but CPU-only detected. "
+                        f"GPU may not be available or wrong PyTorch version installed.",
+                    )
+                # If user selected CUDA but we detected MPS/ROCm or different CUDA
+                elif selected_version.startswith("cu") and backend_detected.startswith(
+                    "cu"
+                ):
+                    # Both CUDA but different versions - warning but not mismatch
+                    if selected_version != backend_detected:
+                        self.report(
+                            {"INFO"},
+                            f"PyTorch working with {backend_detected} (selected {selected_version}). "
+                            f"Reinstall to match exactly.",
+                        )
+                    props.pytorch_backend_mismatch = False
+                elif selected_version != backend_detected:
+                    props.pytorch_backend_mismatch = True
+                    self.report(
+                        {"WARNING"},
+                        f"PyTorch backend mismatch: Selected {selected_version} but {backend_detected} detected.",
+                    )
+                else:
+                    props.pytorch_backend_mismatch = False
+            else:
+                # User selected CPU
+                if backend_detected == "cpu":
+                    props.pytorch_backend_mismatch = False
+                else:
+                    # User selected CPU but GPU available - not a mismatch, just info
+                    props.pytorch_backend_mismatch = False
 
             if gpu_info:
                 self.report({"INFO"}, f"GPU(s) detected: {', '.join(gpu_info)}")
             else:
-                props.gpu_detected = False
                 self.report({"WARNING"}, "No GPU detected - will fallback to CPU")
 
         except ImportError:
             props.gpu_detected = False
+            props.pytorch_backend_detected = ""
+            props.pytorch_backend_mismatch = False
             self.report({"WARNING"}, "PyTorch not installed - cannot check GPU")
         except Exception:
             props.gpu_detected = False

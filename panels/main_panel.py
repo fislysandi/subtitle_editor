@@ -270,7 +270,7 @@ class SEQUENCER_PT_whisper_panel(Panel):
                 )
 
     def _draw_pytorch_section(self, col, props):
-        """Draw PyTorch/GPU section - compact when installed and GPU ready."""
+        """Draw PyTorch/GPU section with backend mismatch detection."""
         # Skip section entirely if PyTorch not installed (will be shown in deps section)
         if not props.deps_torch:
             box = col.box()
@@ -297,9 +297,51 @@ class SEQUENCER_PT_whisper_panel(Panel):
                 )
             return
 
-        # PyTorch is installed - show compact status
+        # PyTorch is installed
         box = col.box()
 
+        # Check for backend mismatch
+        if props.pytorch_backend_mismatch:
+            # Mismatch detected - show warning with fix options
+            box.label(text="PyTorch / GPU", icon="ERROR")
+
+            # Show mismatch details
+            detected = props.pytorch_backend_detected or "CPU"
+            selected = props.pytorch_version
+
+            row = box.row()
+            row.alert = True
+            row.label(text=f"Backend mismatch detected!", icon="ERROR")
+
+            row = box.row()
+            row.label(text=f"Selected: {selected}", icon="PREFERENCES")
+
+            row = box.row()
+            row.label(text=f"Detected: {detected}", icon="CHECKMARK")
+
+            # Show backend selection to choose different version
+            row = box.row()
+            row.label(text="Choose correct version:", icon="PREFERENCES")
+            row = box.row(align=True)
+            row.prop(props, "pytorch_version", text="")
+
+            # Reinstall button
+            row = box.row()
+            row.operator(
+                "subtitle.install_pytorch",
+                text="Reinstall PyTorch",
+                icon="FILE_REFRESH",
+            )
+
+            # Check button to re-detect
+            row = box.row()
+            row.operator(
+                "subtitle.check_gpu", text="Check GPU Again", icon="FILE_REFRESH"
+            )
+
+            return
+
+        # No mismatch - show normal status
         if props.gpu_detected:
             # Compact GPU ready state
             row = box.row()
