@@ -104,27 +104,6 @@ _manual_classes = [
 ]
 
 
-def _sync_speaker_names_handler(depsgraph):
-    if not hasattr(bpy.types.Scene, "subtitle_editor"):
-        add_properties(_addon_properties)
-    for scene in bpy.data.scenes:
-        props = getattr(scene, "subtitle_editor", None)
-        if not props or not scene.sequence_editor:
-            continue
-
-        sequences = sequence_utils._get_sequence_collection(scene)
-        if not sequences:
-            continue
-
-        strips = [s for s in sequences if s.type == "TEXT"]
-        channel_state = {s.name: s.channel for s in strips}
-        cache = scene.get("_subtitle_channel_cache", {})
-
-        if channel_state != cache:
-            scene["_subtitle_channel_cache"] = channel_state
-            props.update_speaker_channels_for_scene(scene)
-
-
 # =============================================================================
 # Registration
 # =============================================================================
@@ -147,9 +126,6 @@ def register():
     load_dictionary(dictionary)
     bpy.app.translations.register(__addon_name__, dictionary)
 
-    if _sync_speaker_names_handler not in bpy.app.handlers.depsgraph_update_post:
-        bpy.app.handlers.depsgraph_update_post.append(_sync_speaker_names_handler)
-
     print(f"[Subtitle Studio] {__addon_name__} addon registered successfully")
 
 
@@ -160,9 +136,6 @@ def unregister():
 
     # Unregister classes
     auto_load.unregister()
-
-    if _sync_speaker_names_handler in bpy.app.handlers.depsgraph_update_post:
-        bpy.app.handlers.depsgraph_update_post.remove(_sync_speaker_names_handler)
 
     # Unregister manual classes (in reverse order)
     for cls in reversed(_manual_classes):

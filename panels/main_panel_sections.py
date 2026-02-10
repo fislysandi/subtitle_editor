@@ -24,54 +24,6 @@ def _get_props(context, panel: str, section: str):
     return props
 
 
-def draw_speaker_header(layout, context):
-    props = _get_props(context, "SEQUENCER_PT_panel", "speaker_header")
-    if not props:
-        return
-
-    tab_row = layout.row(align=True)
-    tab_split = tab_row.split(factor=0.95)
-    tab_tabs = tab_split.row(align=True)
-    tab_tabs.operator_context = "INVOKE_DEFAULT"
-
-    op = tab_tabs.operator(
-        "subtitle.select_speaker_tab",
-        text=props.speaker_name_1,
-        depress=props.speaker_index == 1,
-    )
-    op.index = 1
-
-    op = tab_tabs.operator(
-        "subtitle.select_speaker_tab",
-        text=props.speaker_name_2,
-        depress=props.speaker_index == 2,
-    )
-    op.index = 2
-
-    op = tab_tabs.operator(
-        "subtitle.select_speaker_tab",
-        text=props.speaker_name_3,
-        depress=props.speaker_index == 3,
-    )
-    op.index = 3
-
-    tab_split.column()
-
-    if props.speaker_warning:
-        warn_row = layout.row()
-        warn_row.alert = True
-        warn_row.label(text=props.speaker_warning, icon="ERROR")
-
-    channel_row = layout.row()
-    channel_row.label(
-        text=(
-            f"Ch {props.subtitle_channel}: {props.speaker_name_1}"
-            f"  |  Ch {props.subtitle_channel + 1}: {props.speaker_name_2}"
-            f"  |  Ch {props.subtitle_channel + 2}: {props.speaker_name_3}"
-        )
-    )
-
-
 def draw_list_section(layout, context):
     row = layout.row()
     col = row.column()
@@ -119,7 +71,6 @@ def draw_edit_section(layout, context):
         box.label(text="Subtitle Editing Tools")
         row = box.row(align=True)
         row.prop(props, "nudge_step", text="Step")
-        row.prop(props, "show_speaker_prefix_in_text", text="Prefix in Text")
 
         row = box.row(align=True)
         row.operator("subtitle.jump_to_selected_start", text="Start", icon="TIME")
@@ -142,7 +93,6 @@ def draw_edit_section(layout, context):
         row = box.row(align=True)
         row.prop(item, "frame_start", text="Start")
         row.prop(item, "frame_end", text="End")
-        box.prop(props, "speaker_index", text="Speaker")
 
         box.prop(props, "font_size")
         row = box.row(align=True)

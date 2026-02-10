@@ -27,29 +27,6 @@ class SEQUENCER_PT_panel(Panel):
             return
         scene = context.scene
 
-        tab_row = layout.row(align=True)
-        tab_split = tab_row.split(factor=0.95)
-        tab_tabs = tab_split.row(align=True)
-        tab_tabs.prop(scene.subtitle_editor, "speaker_choice", text="Speaker")
-        op = tab_tabs.operator("subtitle.adjust_speaker_count", text="", icon="ADD")
-        op.direction = 1
-        op = tab_tabs.operator("subtitle.adjust_speaker_count", text="", icon="REMOVE")
-        op.direction = -1
-        tab_split.column()
-
-        if scene.subtitle_editor.speaker_warning:
-            warn_row = layout.row()
-            warn_row.alert = True
-            warn_row.label(text=scene.subtitle_editor.speaker_warning, icon="ERROR")
-
-        channel_row = layout.row()
-        base = scene.subtitle_editor.subtitle_channel
-        names = scene.subtitle_editor._speaker_names()[
-            : scene.subtitle_editor.speaker_count
-        ]
-        labels = [f"Ch {base + idx}: {name}" for idx, name in enumerate(names)]
-        channel_row.label(text="  |  ".join(labels))
-
         row = layout.row()
         col = row.column()
         col.template_list(
@@ -99,11 +76,6 @@ class SEQUENCER_PT_panel(Panel):
             box.label(text="Subtitle Editing Tools")
             row = box.row(align=True)
             row.prop(scene.subtitle_editor, "nudge_step", text="Step")
-            row.prop(
-                scene.subtitle_editor,
-                "show_speaker_prefix_in_text",
-                text="Prefix in Text",
-            )
 
             row = box.row(align=True)
             row.operator(
@@ -135,7 +107,6 @@ class SEQUENCER_PT_panel(Panel):
             row = box.row(align=True)
             row.prop(item, "frame_start", text="Start")
             row.prop(item, "frame_end", text="End")
-            box.prop(scene.subtitle_editor, "speaker_choice", text="Speaker")
 
             # Style
             box.prop(scene.subtitle_editor, "font_size")

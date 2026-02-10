@@ -2,8 +2,6 @@
 Strip Edit Operators
 """
 
-import time
-
 import bpy
 from bpy.types import Operator
 
@@ -145,23 +143,6 @@ def _set_preset_data(props, preset_id: str):
     props.preset_3_shadow_color = props.shadow_color
     props.preset_3_v_align = props.v_align
     props.preset_3_wrap_width = props.wrap_width
-
-
-def _get_speaker_name(props, index: int) -> str:
-    if index == 2:
-        return props.speaker_name_2
-    if index == 3:
-        return props.speaker_name_3
-    return props.speaker_name_1
-
-
-def _set_speaker_name(props, index: int, value: str) -> None:
-    if index == 2:
-        props.speaker_name_2 = value
-    elif index == 3:
-        props.speaker_name_3 = value
-    else:
-        props.speaker_name_1 = value
 
 
 class SUBTITLE_OT_refresh_list(Operator):
@@ -335,7 +316,6 @@ class SUBTITLE_OT_add_strip_at_cursor(Operator):
 
         scene.subtitle_editor.current_text = strip.text
         scene.frame_current = current_frame
-        scene.subtitle_editor.update_speaker_channels(context)
         return {"FINISHED"}
 
 
@@ -566,164 +546,6 @@ class SUBTITLE_OT_save_style_preset(Operator):
         return {"FINISHED"}
 
 
-class SUBTITLE_OT_adjust_speaker_count(Operator):
-    """Adjust the number of speaker tabs"""
-
-    bl_idname = "subtitle.adjust_speaker_count"
-    bl_label = "Adjust Speaker Count"
-    bl_description = "Increase or decrease the number of speaker slots"
-    bl_options = {"REGISTER", "UNDO"}
-
-    direction: bpy.props.IntProperty(default=1)
-    name: bpy.props.StringProperty(name="Speaker Name", default="")
-
-    def invoke(self, context, event):
-        print(
-            f"[Subtitle Studio] adjust_speaker_count invoke direction={self.direction}",
-            flush=True,
-        )
-        if self.direction > 0:
-            props = getattr(context.scene, "subtitle_editor", None)
-            if not props:
-                self.report({"WARNING"}, "Subtitle Studio is not registered")
-                return {"CANCELLED"}
-            next_index = max(1, min(3, props.speaker_count + 1))
-            if next_index == 2:
-                self.name = props.speaker_name_2
-            elif next_index == 3:
-                self.name = props.speaker_name_3
-            return context.window_manager.invoke_props_dialog(self)
-        return self.execute(context)
-
-    def draw(self, context):
-        layout = self.layout
-        layout.prop(self, "name", text="Speaker Name")
-
-    def execute(self, context):
-        print(
-            f"[Subtitle Studio] adjust_speaker_count execute direction={self.direction} name='{self.name}'",
-            flush=True,
-        )
-        scene = context.scene
-        props = getattr(scene, "subtitle_editor", None)
-        if not props:
-            self.report({"WARNING"}, "Subtitle Studio is not registered")
-            return {"CANCELLED"}
-        if not scene.sequence_editor:
-            scene.sequence_editor_create()
-
-        delta = 1 if self.direction >= 0 else -1
-        new_count = max(1, min(3, props.speaker_count + delta))
-
-        if new_count == props.speaker_count:
-            return {"FINISHED"}
-
-        print(
-            f"[Subtitle Studio] speaker_count {props.speaker_count} -> {new_count}",
-            flush=True,
-        )
-        props.speaker_count = new_count
-        if props.speaker_index > new_count:
-            props.speaker_index = new_count
-
-        if self.direction > 0:
-            value = (self.name or "").strip()
-            if not value:
-                self.report({"WARNING"}, "Speaker name cannot be empty")
-                return {"CANCELLED"}
-            if new_count == 2:
-                props.speaker_name_2 = value
-                props.speaker_index = 2
-            elif new_count == 3:
-                props.speaker_name_3 = value
-                props.speaker_index = 3
-
-        print(
-            "[Subtitle Studio] update_speaker_tab/update_speaker_channels/refresh_list",
-            flush=True,
-        )
-        props.update_speaker_tab(context, sync_from_channels=False)
-        if props.speaker_warning:
-            self.report({"WARNING"}, props.speaker_warning)
-        sequence_utils.refresh_list(context)
-        for area in context.screen.areas:
-            if area.type == "SEQUENCE_EDITOR":
-                area.tag_redraw()
-        return {"FINISHED"}
-
-
-class SUBTITLE_OT_select_speaker_tab(Operator):
-    """Select or rename a speaker tab"""
-
-    bl_idname = "subtitle.select_speaker_tab"
-    bl_label = "Select Speaker"
-    bl_description = "Select speaker tab (right click to rename)"
-    bl_options = {"REGISTER"}
-
-    index: bpy.props.IntProperty(default=1, min=1, max=3)
-
-    def invoke(self, context, event):
-        if event.type == "RIGHTMOUSE":
-            bpy.ops.subtitle.rename_speaker("INVOKE_DEFAULT", index=self.index)
-            return {"FINISHED"}
-        if event.type == "LEFTMOUSE" and event.value == "DOUBLE_CLICK":
-            bpy.ops.subtitle.rename_speaker("INVOKE_DEFAULT", index=self.index)
-            return {"FINISHED"}
-        if event.type == "LEFTMOUSE" and event.value == "PRESS":
-            wm = context.window_manager
-            key = f"_subtitle_speaker_click_{self.index}"
-            now = time.monotonic()
-            last_click = getattr(wm, key, 0.0)
-            setattr(wm, key, now)
-            if now - last_click <= 0.35:
-                bpy.ops.subtitle.rename_speaker("INVOKE_DEFAULT", index=self.index)
-                return {"FINISHED"}
-        return self.execute(context)
-
-    def execute(self, context):
-        props = context.scene.subtitle_editor
-        props.speaker_index = self.index
-        return {"FINISHED"}
-
-
-class SUBTITLE_OT_rename_speaker(Operator):
-    """Rename a speaker tab"""
-
-    bl_idname = "subtitle.rename_speaker"
-    bl_label = "Rename Speaker"
-    bl_description = "Rename speaker tab"
-    bl_options = {"REGISTER", "UNDO"}
-
-    index: bpy.props.IntProperty(default=1, min=1, max=3)
-    name: bpy.props.StringProperty(name="Speaker Name", default="")
-
-    def invoke(self, context, event):
-        props = context.scene.subtitle_editor
-        self.name = _get_speaker_name(props, self.index)
-        return context.window_manager.invoke_props_dialog(self)
-
-    def execute(self, context):
-        props = context.scene.subtitle_editor
-        value = (self.name or "").strip()
-        if not value:
-            self.report({"WARNING"}, "Speaker name cannot be empty")
-            return {"CANCELLED"}
-
-        if self.index == 2:
-            old_name = props.speaker_name_2
-        elif self.index == 3:
-            old_name = props.speaker_name_3
-        else:
-            old_name = props.speaker_name_1
-
-        _set_speaker_name(props, self.index, value)
-        for item in context.scene.text_strip_items:
-            if item.speaker == old_name:
-                item.speaker = value
-        props.update_speaker_channels(context)
-        return {"FINISHED"}
-
-
 class SUBTITLE_OT_apply_style(Operator):
     """Apply current style settings to selected subtitle strips"""
 
@@ -928,9 +750,6 @@ classes = [
     SUBTITLE_OT_apply_style,
     SUBTITLE_OT_apply_style_preset,
     SUBTITLE_OT_save_style_preset,
-    SUBTITLE_OT_adjust_speaker_count,
-    SUBTITLE_OT_select_speaker_tab,
-    SUBTITLE_OT_rename_speaker,
     SUBTITLE_OT_copy_style_from_active,
     SUBTITLE_OT_insert_line_breaks,
 ]

@@ -123,33 +123,16 @@ def refresh_list(context):
 
     # Get the designated subtitle channel from settings
     subtitle_channel = props.subtitle_channel
-    speaker_count = max(1, int(getattr(props, "speaker_count", 1)))
-    channels = {subtitle_channel + offset for offset in range(speaker_count)}
 
     # Add only text strips that are on the subtitle channel
     for strip in sequences:
-        if strip.type == "TEXT" and strip.channel in channels:
+        if strip.type == "TEXT" and strip.channel == subtitle_channel:
             item = context.scene.text_strip_items.add()
             item.name = strip.name
             item.text = strip.text
             item.frame_start = strip.frame_final_start
             item.frame_end = strip.frame_final_end
             item.channel = strip.channel
-            if not item.speaker:
-                prefix = None
-                if ":" in strip.name:
-                    head = strip.name.split(":", 1)[0].strip()
-                    if head in [
-                        props.speaker_name_1,
-                        props.speaker_name_2,
-                        props.speaker_name_3,
-                    ]:
-                        prefix = head
-
-                if prefix:
-                    item.speaker = prefix
-                else:
-                    item.speaker = props._speaker_label()
             item.is_selected = strip.select
 
 
