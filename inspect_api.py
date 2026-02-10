@@ -1,8 +1,9 @@
-
 import bpy
 import os
+import tempfile
 
-output_file = "api_dump.txt"
+# Use a temp directory for the output file to avoid permission issues
+output_file = os.path.join(tempfile.gettempdir(), "subtitle_editor_api_dump.txt")
 
 try:
     if bpy.context.scene.sequence_editor:
