@@ -393,27 +393,30 @@ class SEQUENCER_PT_whisper_panel(Panel):
             # Issue #6: Consolidated download progress layout
             self._draw_download_progress(box, props)
         else:
-            # Model selector row
-            row = box.row(align=True)
+            # Model selector - cleaner dropdown without sizes in text
+            row = box.row()
             row.prop(props, "model", text="")
 
+            # Size info right below model selector
+            if props.model in model_sizes:
+                size_row = box.row()
+                size_row.label(text=f"Size: {model_sizes[props.model]}", icon="INFO")
+
+            # Buttons at the bottom
             if props.is_cached:
-                # Model is ready
-                row.label(text="", icon="CHECKMARK")
-                col_dl = box.column(align=True)
-                col_dl.operator(
+                # Model is ready - show redownload button
+                row = box.row()
+                row.operator(
                     "subtitle.download_model",
                     text="Redownload Model",
                     icon="FILE_REFRESH",
                 )
             else:
                 # Show download button
-                row.operator("subtitle.download_model", text="Download", icon="IMPORT")
-
-            # Show model size info when not downloading
-            if props.model in model_sizes:
                 row = box.row()
-                row.label(text=f"Size: {model_sizes[props.model]}", icon="INFO")
+                row.operator(
+                    "subtitle.download_model", text="Download Model", icon="IMPORT"
+                )
 
     def _draw_download_progress(self, box, props):
         """Draw consolidated download progress UI."""
