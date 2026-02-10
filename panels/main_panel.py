@@ -188,11 +188,42 @@ class SEQUENCER_PT_whisper_panel(Panel):
             box.label(text="Reload the addon to restore UI")
             return
 
+        # Transcription Progress Section (Issue #1: Add transcription progress display)
+        if props.is_transcribing:
+            self._draw_transcription_progress(layout, props)
+
         # Dependencies Section
         col = layout.column()
-        box = col.box()
-        row = box.row(align=True)
+        self._draw_dependencies_section(col, props)
 
+        # PyTorch Section
+        self._draw_pytorch_section(col, props)
+
+        # Model Section
+        self._draw_model_section(col, props)
+
+        # Settings Section (Issue #3: Group settings logically)
+        self._draw_hardware_settings(col, props)
+        self._draw_input_settings(col, props)
+        self._draw_output_settings(col, props)
+
+        # Actions Section (Issue #5: Improve action button hierarchy)
+        self._draw_actions_section(col, props)
+
+    def _draw_transcription_progress(self, layout, props):
+        """Draw transcription progress UI with progress bar and status."""
+        progress_box = layout.box()
+        progress_box.alert = True
+        progress_box.label(text="Transcription in Progress", icon="RENDER_STILL")
+        progress_box.prop(props, "progress", text="Progress", slider=True)
+        progress_box.label(text=props.progress_text, icon="INFO")
+        progress_box.operator(
+            "subtitle.cancel_transcription", text="Cancel", icon="CANCEL"
+        )
+        layout.separator()
+
+    def _draw_dependencies_section(self, col, props):
+        """Draw dependencies section - compact when all installed."""
         # Check if all dependencies are installed
         all_deps_installed = (
             props.deps_faster_whisper
@@ -201,58 +232,95 @@ class SEQUENCER_PT_whisper_panel(Panel):
             and props.deps_onnxruntime
         )
 
-        # Dependencies label with icon
-        icon = "CHECKBOX_HLT" if all_deps_installed else "CHECKBOX_DEHLT"
-        row.label(text="Dependencies:", icon=icon)
-
-        # Install/Verify button
-        row = box.row()
-        row.operator(
-            "subtitle.install_dependencies", text="Install/Verify Dependencies"
-        )
-
-        # Show install status if installing
-        if props.is_installing_deps:
-            row = box.row()
-            row.prop(props, "deps_install_status", text="Status", emboss=False)
-        elif not props.deps_faster_whisper or not props.deps_pysubs2:
-            # Show message that PyTorch needs separate install
-            row = box.row()
-            row.label(text="Install base deps first, then PyTorch below", icon="INFO")
-
-        # PyTorch Section
         box = col.box()
 
-        # Check GPU and show warning if not detected
-        if not props.gpu_detected and props.deps_torch:
+        if all_deps_installed:
+            # Compact success state - just show checkmark and minimal info
+            row = box.row()
+            row.label(text="Dependencies", icon="CHECKMARK")
+            # Only show install status if actively installing (verification)
+            if props.is_installing_deps:
+                status_row = box.row()
+                status_row.label(text=props.deps_install_status, icon="INFO")
+        else:
+            # Full install UI when dependencies missing
+            box.label(text="Dependencies", icon="CHECKMARK")
+
             row = box.row()
             row.alert = True
-            row.label(text="⚠ No GPU detected - CPU fallback", icon="ERROR")
-            row = box.row()
-            row.label(text="  Install PyTorch with CUDA for GPU acceleration")
-        elif props.gpu_detected:
-            row = box.row()
-            row.label(text="✓ GPU detected", icon="CHECKMARK")
+            row.label(text="Dependencies not installed", icon="ERROR")
 
-        # PyTorch Version selection (required)
-        row = box.row()
-        row.label(text="Select your GPU backend:", icon="PREFERENCES")
-
-        # PyTorch Version dropdown and Install button
-        row = box.row(align=True)
-        row.prop(props, "pytorch_version", text="Backend")
-        row.operator("subtitle.install_pytorch", text="Install PyTorch")
-
-        # Show PyTorch install status if installing
-        if props.is_installing_pytorch:
+            # Install/Verify button
             row = box.row()
-            row.prop(props, "pytorch_install_status", text="Status", emboss=False)
-        elif not props.deps_torch:
-            # Remind user to install PyTorch
+            row.operator(
+                "subtitle.install_dependencies", text="Install/Verify Dependencies"
+            )
+
+            # Show install status if installing
+            if props.is_installing_deps:
+                status_box = box.box()
+                status_box.label(
+                    text=f"Status: {props.deps_install_status}", icon="INFO"
+                )
+            elif not props.deps_faster_whisper or not props.deps_pysubs2:
+                # Show message that PyTorch needs separate install
+                info_row = box.row()
+                info_row.label(
+                    text="Install base deps first, then PyTorch below", icon="INFO"
+                )
+
+    def _draw_pytorch_section(self, col, props):
+        """Draw PyTorch/GPU section - compact when installed and GPU ready."""
+        # Skip section entirely if PyTorch not installed (will be shown in deps section)
+        if not props.deps_torch:
+            box = col.box()
+            box.label(text="PyTorch / GPU", icon="PREFERENCES")
+
             row = box.row()
             row.alert = True
-            row.label(text="⚠ Select backend and click Install PyTorch", icon="ERROR")
+            row.label(text="PyTorch not installed", icon="ERROR")
 
+            # PyTorch Version selection
+            row = box.row()
+            row.label(text="Select GPU backend:", icon="PREFERENCES")
+
+            # PyTorch Version dropdown and Install button
+            row = box.row(align=True)
+            row.prop(props, "pytorch_version", text="Backend")
+            row.operator("subtitle.install_pytorch", text="Install PyTorch")
+
+            # Show PyTorch install status if installing
+            if props.is_installing_pytorch:
+                status_box = box.box()
+                status_box.label(
+                    text=f"Status: {props.pytorch_install_status}", icon="INFO"
+                )
+            return
+
+        # PyTorch is installed - show compact status
+        box = col.box()
+
+        if props.gpu_detected:
+            # Compact GPU ready state
+            row = box.row()
+            row.label(text="PyTorch / GPU", icon="CHECKMARK")
+        else:
+            # CPU-only state with warning
+            box.label(text="PyTorch / GPU", icon="PREFERENCES")
+            row = box.row()
+            row.alert = True
+            row.label(text="CPU only (no GPU detected)", icon="ERROR")
+
+            # Show backend selection for potential GPU install
+            row = box.row()
+            row.label(text="Backend:", icon="PREFERENCES")
+            row.prop(props, "pytorch_version", text="")
+
+            row = box.row()
+            row.operator("subtitle.install_pytorch", text="Reinstall for GPU")
+
+    def _draw_model_section(self, col, props):
+        """Draw model download section with improved progress layout."""
         # Model sizes mapping for all 19 models
         model_sizes = {
             "tiny": "39 MB",
@@ -276,28 +344,21 @@ class SEQUENCER_PT_whisper_panel(Panel):
             "turbo": "809 MB",
         }
 
-        # Model dropdown with download/cancel button
         box = col.box()
-        row = box.row(align=True)
-        row.prop(props, "model", text="")
+        box.label(text="Whisper Model", icon="MODIFIER")
 
         if props.is_downloading_model:
-            # Show cancel button during download
-            row.operator("subtitle.cancel_download", text="Cancel", icon="CANCEL")
-
-            # Show progress bar
-            box.prop(
-                props, "model_download_progress", text="Download Progress", slider=True
-            )
-
-            # Show status message
-            box.label(text=props.model_download_status, icon="FILE_REFRESH")
+            # Issue #6: Consolidated download progress layout
+            self._draw_download_progress(box, props)
         else:
+            # Model selector row
+            row = box.row(align=True)
+            row.prop(props, "model", text="")
+
             if props.is_cached:
                 # Model is ready
+                row.label(text="", icon="CHECKMARK")
                 col_dl = box.column(align=True)
-                col_dl.label(text="Model Ready", icon="CHECKMARK")
-                # Optional: Redownload button (smaller/different icon)
                 col_dl.operator(
                     "subtitle.download_model",
                     text="Redownload Model",
@@ -312,10 +373,31 @@ class SEQUENCER_PT_whisper_panel(Panel):
                 row = box.row()
                 row.label(text=f"Size: {model_sizes[props.model]}", icon="INFO")
 
+    def _draw_download_progress(self, box, props):
+        """Draw consolidated download progress UI."""
+        dl_box = box.box()
+        dl_box.alert = True
+        dl_box.label(text="Downloading Model...", icon="IMPORT")
+        dl_box.prop(props, "model_download_progress", text="Progress", slider=True)
+        dl_box.label(text=props.model_download_status, icon="FILE_REFRESH")
+        dl_box.operator(
+            "subtitle.cancel_download", text="Cancel Download", icon="CANCEL"
+        )
+
+    def _draw_hardware_settings(self, col, props):
+        """Draw hardware configuration settings."""
+        box = col.box()
+        box.label(text="Hardware Settings", icon="PREFERENCES")
+
         # Device | Compute Type row
         row = box.row(align=True)
-        row.prop(props, "device", text="")
-        row.prop(props, "compute_type", text="")
+        row.prop(props, "device", text="Device")
+        row.prop(props, "compute_type", text="Compute")
+
+    def _draw_input_settings(self, col, props):
+        """Draw input/processing settings."""
+        box = col.box()
+        box.label(text="Recognition Settings", icon="SOUND")
 
         # Language dropdown
         box.prop(props, "language")
@@ -323,7 +405,7 @@ class SEQUENCER_PT_whisper_panel(Panel):
         # Beam Size | VAD Filter row
         row = box.row(align=True)
         row.prop(props, "beam_size", text="Beam Size")
-        row.prop(props, "vad_filter", text="")
+        row.prop(props, "vad_filter", text="VAD Filter")
 
         # Show Advanced Options toggle
         box.prop(props, "show_advanced")
@@ -351,6 +433,11 @@ class SEQUENCER_PT_whisper_panel(Panel):
             row = box.row()
             row.prop(props, "max_words_per_strip", slider=True)
 
+    def _draw_output_settings(self, col, props):
+        """Draw output/subtitle strip settings."""
+        box = col.box()
+        box.label(text="Output Settings", icon="OUTPUT")
+
         # Channel | Font Size row
         row = box.row(align=True)
         row.prop(props, "subtitle_channel", text="Channel")
@@ -361,18 +448,26 @@ class SEQUENCER_PT_whisper_panel(Panel):
         row.prop(props, "v_align", text="V Align")
         row.prop(props, "wrap_width", text="Wrap Width", toggle=True)
 
-        # Actions Section
+    def _draw_actions_section(self, col, props):
+        """Draw action buttons with improved hierarchy."""
         box = col.box()
+        box.label(text="Actions", icon="PLAY")
         action_col = box.column(align=True)
 
         # Transcribe to Text Strips button
         row = action_col.row(align=True)
+        row.scale_y = 1.3  # Make button taller for prominence
         row.operator(
-            "subtitle.transcribe", text="Transcribe to Text Strips", icon="RADIOBUT_OFF"
+            "subtitle.transcribe",
+            text="Transcribe Audio",
+            icon="SOUND",  # More descriptive icon
         )
 
-        # Translate to Text Strips (EN) button
+        # Translate to Text Strips button
         row = action_col.row(align=True)
+        row.scale_y = 1.3
         row.operator(
-            "subtitle.translate", text="Translate to Text Strips (EN)", icon="FONT_DATA"
+            "subtitle.translate",
+            text="Translate to English",
+            icon="WORLD",  # More descriptive icon
         )

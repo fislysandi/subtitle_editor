@@ -358,7 +358,29 @@ class SUBTITLE_OT_translate(_BaseTranscribeOperator):
         self._refresh_list(scene)
 
 
+class SUBTITLE_OT_cancel_transcription(Operator):
+    """Cancel the current transcription or translation operation"""
+
+    bl_idname = "subtitle.cancel_transcription"
+    bl_label = "Cancel Transcription"
+    bl_description = "Cancel the current transcription/translation"
+    bl_options = {"REGISTER"}
+
+    def execute(self, context):
+        """Signal cancellation request."""
+        props = context.scene.subtitle_editor
+
+        if props.is_transcribing:
+            props.progress_text = "Cancelling..."
+            self.report({"INFO"}, "Cancelling transcription...")
+        else:
+            self.report({"WARNING"}, "No transcription in progress")
+
+        return {"FINISHED"}
+
+
 classes = [
     SUBTITLE_OT_transcribe,
     SUBTITLE_OT_translate,
+    SUBTITLE_OT_cancel_transcription,
 ]
