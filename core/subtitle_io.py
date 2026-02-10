@@ -144,9 +144,9 @@ class SubtitleIO:
         subs = pysubs2.SSAFile.from_string(content)
         entries = []
 
-        for line in subs:
+        for i, line in enumerate(subs, 1):
             entry = SubtitleEntry(
-                index=line.index,
+                index=i,  # Use enumeration index (SSAEvent doesn't have index attribute)
                 start=line.start / 1000.0,  # Convert ms to seconds
                 end=line.end / 1000.0,
                 text=line.text.replace("\\N", "\n"),  # Convert newlines
