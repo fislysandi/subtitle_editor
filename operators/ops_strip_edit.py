@@ -65,7 +65,7 @@ def _select_strip_by_index(context, index: int) -> bool:
 
 
 def _resolve_edit_target_or_report(operator, context):
-    resolution = sequence_utils.resolve_edit_target(context, allow_index_fallback=True)
+    resolution = sequence_utils.resolve_edit_target(context, allow_index_fallback=False)
     if resolution.strip:
         return resolution
 
@@ -378,7 +378,7 @@ class SUBTITLE_OT_update_text(Operator):
 
 def _jump_to_selected(context, edge: str):
     scene = context.scene
-    resolution = sequence_utils.resolve_edit_target(context, allow_index_fallback=True)
+    resolution = sequence_utils.resolve_edit_target(context, allow_index_fallback=False)
     strip = resolution.strip
     if not strip:
         return False, resolution.warning or "No subtitle selected"
@@ -464,14 +464,25 @@ class SUBTITLE_OT_nudge_strip(Operator):
         strip_start = int(strip.frame_final_start)
         strip_end = int(strip.frame_final_end)
 
-        def _set_duration(target_strip, duration: int) -> None:
+        def _set_end(target_strip, new_end: int) -> bool:
+            for attr in ("frame_final_end", "frame_end"):
+                if hasattr(target_strip, attr):
+                    try:
+                        setattr(target_strip, attr, new_end)
+                        return True
+                    except Exception:
+                        continue
+            return False
+
+        def _set_duration(target_strip, duration: int) -> bool:
             for attr in ("frame_final_duration", "frame_duration"):
                 if hasattr(target_strip, attr):
                     try:
                         setattr(target_strip, attr, duration)
-                        return
+                        return True
                     except Exception:
                         continue
+            return False
 
         if self.edge == "START":
             new_start = max(scene.frame_start, strip_start + delta)
@@ -479,11 +490,13 @@ class SUBTITLE_OT_nudge_strip(Operator):
             if new_start != strip_start:
                 new_duration = max(1, strip_end - new_start)
                 strip.frame_start = new_start
-                _set_duration(strip, new_duration)
+                if not _set_end(strip, strip_end):
+                    _set_duration(strip, new_duration)
         else:
             new_end = max(strip_start + 1, strip_end + delta)
             new_duration = max(1, new_end - strip_start)
-            _set_duration(strip, new_duration)
+            if not _set_end(strip, new_end):
+                _set_duration(strip, new_duration)
 
         if item is not None:
             item.frame_start = strip.frame_final_start
@@ -560,8 +573,17 @@ class SUBTITLE_OT_apply_style(Operator):
         # Get selected sequences
         selected = sequence_utils.get_selected_strips(context)
         if not selected:
-            self.report({"WARNING"}, "No strips selected")
-            return {"CANCELLED"}
+            resolution = sequence_utils.resolve_edit_target(
+                context,
+                allow_index_fallback=False,
+            )
+            if not resolution.strip:
+                self.report(
+                    {"WARNING"},
+                    resolution.warning or "No text strip selected",
+                )
+                return {"CANCELLED"}
+            selected = [resolution.strip]
 
         count = 0
         for strip in selected:
@@ -706,8 +728,17 @@ class SUBTITLE_OT_insert_line_breaks(Operator):
         # Get selected sequences
         selected = sequence_utils.get_selected_strips(context)
         if not selected:
-            self.report({"WARNING"}, "No strips selected")
-            return {"CANCELLED"}
+            resolution = sequence_utils.resolve_edit_target(
+                context,
+                allow_index_fallback=False,
+            )
+            if not resolution.strip:
+                self.report(
+                    {"WARNING"},
+                    resolution.warning or "No text strip selected",
+                )
+                return {"CANCELLED"}
+            selected = [resolution.strip]
 
         count = 0
         for strip in selected:

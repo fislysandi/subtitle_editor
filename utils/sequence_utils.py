@@ -90,7 +90,7 @@ def get_selected_strip(context) -> Optional[Any]:
     if context.scene.sequence_editor:
         active = getattr(context.scene.sequence_editor, "active_strip", None)
 
-    if active and getattr(active, "type", "") == "TEXT" and active.select:
+    if active and getattr(active, "type", "") == "TEXT":
         return active
 
     selected_text = [s for s in sequences if s.select and s.type == "TEXT"]
@@ -128,11 +128,7 @@ def resolve_edit_target_for_scene(
 
     selected_text = [s for s in sequences if s.type == "TEXT" and s.select]
 
-    if (
-        active_strip
-        and getattr(active_strip, "type", "") == "TEXT"
-        and getattr(active_strip, "select", False)
-    ):
+    if active_strip and getattr(active_strip, "type", "") == "TEXT":
         item, idx = _find_list_item_for_strip(scene, active_strip.name)
         return EditTargetResolution(active_strip, item, idx, "")
 
@@ -164,12 +160,22 @@ def resolve_edit_target_for_scene(
 
 
 def get_selected_strips(context) -> List[Any]:
-    """Get all selected strips in the sequencer"""
+    """Get selected TEXT strips; fallback to active TEXT strip."""
     sequences = _get_sequence_collection(context.scene)
     if not sequences:
         return []
 
-    return [s for s in sequences if s.select]
+    selected_text = [s for s in sequences if s.select and s.type == "TEXT"]
+    if selected_text:
+        return selected_text
+
+    active = None
+    if context.scene.sequence_editor:
+        active = getattr(context.scene.sequence_editor, "active_strip", None)
+    if active and getattr(active, "type", "") == "TEXT":
+        return [active]
+
+    return []
 
 
 def get_strip_filepath(strip) -> Optional[str]:
