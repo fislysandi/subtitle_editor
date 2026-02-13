@@ -121,6 +121,7 @@ def register():
 
     # Register addon properties
     add_properties(_addon_properties)
+    sequence_utils.register_handlers()
 
     # Load translations
     load_dictionary(dictionary)
@@ -133,6 +134,8 @@ def unregister():
     """Unregister the addon"""
     # Unload translations
     bpy.app.translations.unregister(__addon_name__)
+
+    sequence_utils.unregister_handlers()
 
     # Unregister classes
     auto_load.unregister()

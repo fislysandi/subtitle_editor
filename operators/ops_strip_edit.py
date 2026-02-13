@@ -60,26 +60,20 @@ def _select_strip_by_index(context, index: int) -> bool:
 
     if index < 0 or index >= len(scene.text_strip_items):
         return False
-
-    item = scene.text_strip_items[index]
-
-    sequences = sequence_utils._get_sequence_collection(scene)
-    if sequences:
-        for strip in sequences:
-            strip.select = strip.name == item.name
-            if strip.name == item.name:
-                scene.frame_current = strip.frame_final_start
-
-    scene.subtitle_editor.current_text = item.text
     scene.text_strip_items_index = index
     return True
 
 
-def _get_active_item(scene):
-    index = scene.text_strip_items_index
-    if index < 0 or index >= len(scene.text_strip_items):
-        return None
-    return scene.text_strip_items[index]
+def _resolve_edit_target_or_report(operator, context):
+    resolution = sequence_utils.resolve_edit_target(context, allow_index_fallback=True)
+    if resolution.strip:
+        return resolution
+
+    operator.report(
+        {"WARNING"},
+        resolution.warning or "No deterministic TEXT strip target",
+    )
+    return None
 
 
 def _get_preset_data(props, preset_id: str):
@@ -302,7 +296,6 @@ class SUBTITLE_OT_add_strip_at_cursor(Operator):
                 scene.text_strip_items_index = index
                 break
 
-        scene.subtitle_editor.current_text = strip.text
         scene.frame_current = current_frame
         return {"FINISHED"}
 
@@ -351,12 +344,13 @@ class SUBTITLE_OT_remove_selected_strip(Operator):
         new_length = len(scene.text_strip_items)
         if new_length == 0:
             scene.text_strip_items_index = -1
-            scene.subtitle_editor.current_text = ""
+            scene.subtitle_editor._updating_text = True
+            try:
+                scene.subtitle_editor.current_text = ""
+            finally:
+                scene.subtitle_editor._updating_text = False
         else:
             scene.text_strip_items_index = min(index, new_length - 1)
-            scene.subtitle_editor.current_text = scene.text_strip_items[
-                scene.text_strip_items_index
-            ].text
 
         return {"FINISHED"}
 
@@ -371,49 +365,37 @@ class SUBTITLE_OT_update_text(Operator):
 
     def execute(self, context):
         scene = context.scene
-        index = scene.text_strip_items_index
-
-        if index < 0 or index >= len(scene.text_strip_items):
-            self.report({"WARNING"}, "No subtitle selected")
+        resolution = _resolve_edit_target_or_report(self, context)
+        if not resolution or resolution.strip is None:
             return {"CANCELLED"}
 
-        item = scene.text_strip_items[index]
         new_text = scene.subtitle_editor.current_text
-
-        # Update UI list
-        item.text = new_text
-
-        # Update actual strip
-        sequences = sequence_utils._get_sequence_collection(scene)
-        if sequences:
-            for strip in sequences:
-                if strip.name == item.name and strip.type == "TEXT":
-                    strip.text = new_text
-                    break
+        resolution.strip.text = new_text
+        if resolution.item is not None:
+            resolution.item.text = new_text
         return {"FINISHED"}
 
 
 def _jump_to_selected(context, edge: str):
     scene = context.scene
-    item = _get_active_item(scene)
-    if not item:
-        return False, "No subtitle selected"
+    resolution = sequence_utils.resolve_edit_target(context, allow_index_fallback=True)
+    strip = resolution.strip
+    if not strip:
+        return False, resolution.warning or "No subtitle selected"
+
+    if edge == "END":
+        scene.frame_current = strip.frame_final_end
+    else:
+        scene.frame_current = strip.frame_final_start
 
     sequences = sequence_utils._get_sequence_collection(scene)
-    if not sequences:
-        return False, "No sequence editor"
+    if sequences:
+        for seq in sequences:
+            seq.select = seq == strip
+    if scene.sequence_editor:
+        scene.sequence_editor.active_strip = strip
 
-    for strip in sequences:
-        if strip.name == item.name and strip.type == "TEXT":
-            if edge == "END":
-                scene.frame_current = strip.frame_final_end
-            else:
-                scene.frame_current = strip.frame_final_start
-            strip.select = True
-            scene.sequence_editor.active_strip = strip
-            return True, ""
-
-    return False, "Selected subtitle not found"
+    return True, ""
 
 
 class SUBTITLE_OT_jump_to_selected_start(Operator):
@@ -468,17 +450,46 @@ class SUBTITLE_OT_nudge_strip(Operator):
     def execute(self, context):
         scene = context.scene
         props = scene.subtitle_editor
-        item = _get_active_item(scene)
-        if not item:
-            self.report({"WARNING"}, "No subtitle selected")
+        resolution = _resolve_edit_target_or_report(self, context)
+        if not resolution:
             return {"CANCELLED"}
 
+        strip = resolution.strip
+        if strip is None:
+            self.report({"WARNING"}, "No deterministic TEXT strip target")
+            return {"CANCELLED"}
+        item = resolution.item
+
         delta = max(1, props.nudge_step) * (1 if self.direction >= 0 else -1)
+        strip_start = int(strip.frame_final_start)
+        strip_end = int(strip.frame_final_end)
+
+        def _set_duration(target_strip, duration: int) -> None:
+            for attr in ("frame_final_duration", "frame_duration"):
+                if hasattr(target_strip, attr):
+                    try:
+                        setattr(target_strip, attr, duration)
+                        return
+                    except Exception:
+                        continue
 
         if self.edge == "START":
-            item.frame_start = max(scene.frame_start, item.frame_start + delta)
+            new_start = max(scene.frame_start, strip_start + delta)
+            new_start = min(new_start, strip_end - 1)
+            if new_start != strip_start:
+                new_duration = max(1, strip_end - new_start)
+                strip.frame_start = new_start
+                _set_duration(strip, new_duration)
         else:
-            item.frame_end = max(item.frame_start + 1, item.frame_end + delta)
+            new_end = max(strip_start + 1, strip_end + delta)
+            new_duration = max(1, new_end - strip_start)
+            _set_duration(strip, new_duration)
+
+        if item is not None:
+            item.frame_start = strip.frame_final_start
+            item.frame_end = strip.frame_final_end
+
+        scene.frame_current = strip.frame_final_start
 
         return {"FINISHED"}
 

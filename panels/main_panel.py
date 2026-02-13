@@ -5,7 +5,7 @@ Simplified version matching upstream layout but using existing operators
 
 import bpy
 from bpy.types import Panel
-from ..utils import sequence_utils
+from . import main_panel_sections
 
 
 class SEQUENCER_PT_panel(Panel):
@@ -20,132 +20,15 @@ class SEQUENCER_PT_panel(Panel):
     def draw(self, context):
         layout = self.layout
         scene = context.scene
-        sequence_utils.request_list_sync_from_selected_strip(context)
         if not getattr(scene, "subtitle_editor", None):
             box = layout.box()
             box.alert = True
             box.label(text="Subtitle Studio not registered", icon="ERROR")
             box.label(text="Reload the addon to restore UI")
             return
-        scene = context.scene
 
-        row = layout.row()
-        col = row.column()
-        col.template_list(
-            "SEQUENCER_UL_List",
-            "",
-            context.scene,
-            "text_strip_items",
-            context.scene,
-            "text_strip_items_index",
-            rows=10,
-        )
-
-        # Button column
-        row = row.column(align=True)
-
-        # Refresh
-        row.operator("subtitle.refresh_list", text="", icon="FILE_REFRESH")
-        row.separator()
-
-        # Import/Export
-        row.operator("subtitle.import_subtitles", text="", icon="IMPORT")
-        row.operator("subtitle.export_subtitles", text="", icon="EXPORT")
-        row.separator()
-
-        row.operator("subtitle.add_strip_at_cursor", text="", icon="ADD")
-        row.operator("subtitle.remove_selected_strip", text="", icon="REMOVE")
-        row.separator()
-        row.operator("subtitle.select_next_strip", text="", icon="TRIA_UP")
-        row.operator("subtitle.select_previous_strip", text="", icon="TRIA_DOWN")
-        row.separator()
-
-        # Edit section (moved from separate panel)
-        layout.separator()
-
-        selected_strip = sequence_utils.get_selected_strip(context)
-        selected_item = None
-        if selected_strip and getattr(selected_strip, "type", "") == "TEXT":
-            for list_item in scene.text_strip_items:
-                if list_item.name == selected_strip.name:
-                    selected_item = list_item
-                    break
-
-        # Edit selected
-        if selected_strip and getattr(selected_strip, "type", "") == "TEXT":
-            col = layout.column()
-
-            # Text editing box
-            box = col.box()
-            box.label(text=f"Editing: {selected_strip.name}")
-            box.prop(scene.subtitle_editor, "current_text")
-
-            # Subtitle editing tools
-            box = col.box()
-            box.label(text="Subtitle Editing Tools")
-            row = box.row(align=True)
-            row.prop(scene.subtitle_editor, "nudge_step", text="Step")
-
-            row = box.row(align=True)
-            row.operator(
-                "subtitle.jump_to_selected_start",
-                text="Start",
-                icon="TIME",
-            )
-            op = row.operator("subtitle.nudge_strip", text="-", icon="TRIA_LEFT")
-            op.edge = "START"
-            op.direction = -1
-            op = row.operator("subtitle.nudge_strip", text="+", icon="TRIA_RIGHT")
-            op.edge = "START"
-            op.direction = 1
-
-            row = box.row(align=True)
-            row.operator(
-                "subtitle.jump_to_selected_end",
-                text="End",
-                icon="TIME",
-            )
-            op = row.operator("subtitle.nudge_strip", text="-", icon="TRIA_LEFT")
-            op.edge = "END"
-            op.direction = -1
-            op = row.operator("subtitle.nudge_strip", text="+", icon="TRIA_RIGHT")
-            op.edge = "END"
-            op.direction = 1
-
-            # Timing and position
-            row = box.row(align=True)
-            if selected_item:
-                row.prop(selected_item, "frame_start", text="Start")
-                row.prop(selected_item, "frame_end", text="End")
-            else:
-                row.label(text=f"Start {selected_strip.frame_final_start}")
-                row.label(text=f"End {selected_strip.frame_final_end}")
-
-            # Style
-            box.prop(scene.subtitle_editor, "font_size")
-            row = box.row(align=True)
-            row.prop(scene.subtitle_editor, "text_color")
-            row.prop(scene.subtitle_editor, "shadow_color")
-            row = box.row(align=True)
-            row.prop(scene.subtitle_editor, "v_align")
-            row.prop(scene.subtitle_editor, "wrap_width")
-
-            # Line breaks
-            box.prop(scene.subtitle_editor, "max_chars_per_line")
-            box.operator(
-                "subtitle.insert_line_breaks", text="Insert Line Breaks", icon="TEXT"
-            )
-        else:
-            box = layout.box()
-            box.label(text="Select a TEXT strip in Sequencer to edit")
-
-        style_box = layout.box()
-        style_box.label(text="Batch Styling")
-        style_box.operator(
-            "subtitle.copy_style_from_active",
-            text="Copy Active Style to Selected",
-            icon="BRUSH_DATA",
-        )
+        main_panel_sections.draw_list_section(layout, context)
+        main_panel_sections.draw_edit_section(layout, context)
 
 
 class SEQUENCER_PT_whisper_panel(Panel):

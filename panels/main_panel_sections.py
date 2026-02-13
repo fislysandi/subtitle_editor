@@ -54,18 +54,13 @@ def draw_list_section(layout, context):
 
 def draw_edit_section(layout, context):
     scene = context.scene
-    sequence_utils.request_list_sync_from_selected_strip(context)
     props = _get_props(context, "SEQUENCER_PT_panel", "edit_section")
     if not props:
         return
 
-    selected_strip = sequence_utils.get_selected_strip(context)
-    selected_item = None
-    if selected_strip and getattr(selected_strip, "type", "") == "TEXT":
-        for list_item in scene.text_strip_items:
-            if list_item.name == selected_strip.name:
-                selected_item = list_item
-                break
+    resolution = sequence_utils.resolve_edit_target(context, allow_index_fallback=True)
+    selected_strip = resolution.strip
+    selected_item = resolution.item
 
     layout.separator()
 
@@ -121,7 +116,8 @@ def draw_edit_section(layout, context):
         )
     else:
         box = layout.box()
-        box.label(text="Select a TEXT strip in Sequencer to edit")
+        box.alert = True
+        box.label(text=resolution.warning or "Select a TEXT strip in Sequencer to edit")
 
     style_box = layout.box()
     style_box.label(text="Batch Styling")

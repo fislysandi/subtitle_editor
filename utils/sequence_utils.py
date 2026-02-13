@@ -5,11 +5,18 @@ Helper functions for working with Blender sequencer
 """
 
 import bpy
-from typing import Optional, List, Any
-from types import SimpleNamespace
+from bpy.app.handlers import persistent
+from typing import Optional, List, Any, NamedTuple
 
 
-_pending_sync_keys = set()
+_selection_signature_by_scene = {}
+
+
+class EditTargetResolution(NamedTuple):
+    strip: Optional[Any]
+    item: Optional[Any]
+    item_index: int
+    warning: str
 
 
 def _get_sequence_collection(scene):
@@ -17,6 +24,60 @@ def _get_sequence_collection(scene):
         return None
 
     return scene.sequence_editor.strips
+
+
+def _find_text_strip_by_name(scene, strip_name: str) -> Optional[Any]:
+    if not strip_name:
+        return None
+
+    sequences = _get_sequence_collection(scene)
+    if not sequences:
+        return None
+
+    for strip in sequences:
+        if strip.type == "TEXT" and strip.name == strip_name:
+            return strip
+
+    return None
+
+
+def _find_list_item_for_strip(scene, strip_name: str):
+    items = getattr(scene, "text_strip_items", None)
+    if items is None:
+        return None, -1
+
+    for idx, item in enumerate(items):
+        if item.name == strip_name:
+            return item, idx
+
+    return None, -1
+
+
+def _sync_current_text_from_strip(scene, strip) -> None:
+    props = getattr(scene, "subtitle_editor", None)
+    if not props:
+        return
+
+    if props.current_text == strip.text:
+        return
+
+    props._updating_text = True
+    try:
+        props.current_text = strip.text
+    finally:
+        props._updating_text = False
+
+
+def _set_single_strip_selected(scene, target_strip) -> None:
+    sequences = _get_sequence_collection(scene)
+    if not sequences:
+        return
+
+    for strip in sequences:
+        strip.select = strip == target_strip
+
+    if scene.sequence_editor:
+        scene.sequence_editor.active_strip = target_strip
 
 
 def get_selected_strip(context) -> Optional[Any]:
@@ -40,6 +101,66 @@ def get_selected_strip(context) -> Optional[Any]:
         return active
 
     return None
+
+
+def resolve_edit_target(
+    context, allow_index_fallback: bool = True
+) -> EditTargetResolution:
+    """Resolve a single authoritative target for edit UI and tools."""
+    scene = getattr(context, "scene", None)
+    return resolve_edit_target_for_scene(scene, allow_index_fallback)
+
+
+def resolve_edit_target_for_scene(
+    scene, allow_index_fallback: bool = True
+) -> EditTargetResolution:
+    """Scene-based target resolver shared by handlers and property callbacks."""
+    if not scene:
+        return EditTargetResolution(None, None, -1, "No active scene")
+
+    sequences = _get_sequence_collection(scene)
+    if not sequences:
+        return EditTargetResolution(None, None, -1, "No sequence editor")
+
+    active_strip = None
+    if scene.sequence_editor:
+        active_strip = getattr(scene.sequence_editor, "active_strip", None)
+
+    selected_text = [s for s in sequences if s.type == "TEXT" and s.select]
+
+    if (
+        active_strip
+        and getattr(active_strip, "type", "") == "TEXT"
+        and getattr(active_strip, "select", False)
+    ):
+        item, idx = _find_list_item_for_strip(scene, active_strip.name)
+        return EditTargetResolution(active_strip, item, idx, "")
+
+    if len(selected_text) == 1:
+        strip = selected_text[0]
+        item, idx = _find_list_item_for_strip(scene, strip.name)
+        return EditTargetResolution(strip, item, idx, "")
+
+    if len(selected_text) > 1:
+        return EditTargetResolution(
+            None,
+            None,
+            -1,
+            "Multiple TEXT strips selected; set one active strip to edit.",
+        )
+
+    if not allow_index_fallback:
+        return EditTargetResolution(None, None, -1, "Select a TEXT strip in Sequencer")
+
+    items = getattr(scene, "text_strip_items", [])
+    index = getattr(scene, "text_strip_items_index", -1)
+    if 0 <= index < len(items):
+        item = items[index]
+        strip = _find_text_strip_by_name(scene, item.name)
+        if strip:
+            return EditTargetResolution(strip, item, index, "")
+
+    return EditTargetResolution(None, None, -1, "Select a TEXT strip in Sequencer")
 
 
 def get_selected_strips(context) -> List[Any]:
@@ -166,32 +287,38 @@ def on_text_strip_index_update(self, context):
     if not context.scene:
         return
 
-    index = context.scene.text_strip_items_index
-    items = context.scene.text_strip_items
+    scene = context.scene
+    props = getattr(scene, "subtitle_editor", None)
+    if not props:
+        return
+
+    if getattr(props, "_syncing_target", False):
+        return
+
+    index = scene.text_strip_items_index
+    items = scene.text_strip_items
 
     if 0 <= index < len(items):
         item = items[index]
-        # Jump cursor to start of strip
-        context.scene.frame_current = item.frame_start
+        strip = _find_text_strip_by_name(scene, item.name)
 
-        # Sync editing text
-        context.scene.subtitle_editor.current_text = item.text
-
-        # Optional: Select the actual strip in sequencer
-        # This keeps the UI list and Sequencer selection in sync
-        sequences = _get_sequence_collection(context.scene)
-        if sequences:
-            # Deselect all
-            for s in sequences:
-                s.select = False
-
-            # Select the matching strip
-            for s in sequences:
-                if s.name == item.name:
-                    s.select = True
-                    if context.scene.sequence_editor:
-                        context.scene.sequence_editor.active_strip = s
-                    break
+        props._syncing_target = True
+        try:
+            if strip:
+                _set_single_strip_selected(scene, strip)
+                scene.frame_current = strip.frame_final_start
+                if item.text != strip.text:
+                    item.text = strip.text
+                _sync_current_text_from_strip(scene, strip)
+            else:
+                scene.frame_current = item.frame_start
+                props._updating_text = True
+                try:
+                    props.current_text = item.text
+                finally:
+                    props._updating_text = False
+        finally:
+            props._syncing_target = False
 
 
 def sync_list_selection_from_sequencer(context) -> bool:
@@ -200,12 +327,9 @@ def sync_list_selection_from_sequencer(context) -> bool:
     if not scene:
         return False
 
-    props = getattr(scene, "subtitle_editor", None)
-    if not props:
-        return False
-
-    selected = get_selected_strip(context)
-    if not selected or getattr(selected, "type", "") != "TEXT":
+    resolution = resolve_edit_target(context, allow_index_fallback=False)
+    selected = resolution.strip
+    if not selected:
         return False
 
     items = scene.text_strip_items
@@ -228,73 +352,78 @@ def sync_list_selection_from_sequencer(context) -> bool:
     if scene.text_strip_items_index != match_index:
         scene.text_strip_items_index = match_index
 
-    # Keep inline editor text in sync without triggering write-back loop.
-    if props.current_text != selected.text:
-        props._updating_text = True
-        try:
-            props.current_text = selected.text
-        finally:
-            props._updating_text = False
+    _sync_current_text_from_strip(scene, selected)
 
     return True
 
 
-def request_list_sync_from_selected_strip(context) -> None:
-    """Defer list/index sync so writes do not happen in panel draw context."""
-    scene = getattr(context, "scene", None)
+def _selection_signature(scene):
+    sequences = _get_sequence_collection(scene)
+    if not sequences:
+        return None
+
+    active_name = ""
+    if scene.sequence_editor and scene.sequence_editor.active_strip:
+        active_name = scene.sequence_editor.active_strip.name
+
+    selected_names = tuple(
+        sorted(s.name for s in sequences if s.type == "TEXT" and s.select)
+    )
+    return active_name, selected_names
+
+
+def _sync_edit_state_from_scene(scene) -> None:
+    props = getattr(scene, "subtitle_editor", None)
+    if not props:
+        return
+
+    resolution = resolve_edit_target_for_scene(scene, allow_index_fallback=False)
+    strip = resolution.strip
+    if not strip:
+        return
+
+    item, idx = _find_list_item_for_strip(scene, strip.name)
+    props._syncing_target = True
+    try:
+        if idx >= 0 and scene.text_strip_items_index != idx:
+            scene.text_strip_items_index = idx
+        if item and item.text != strip.text:
+            item.text = strip.text
+        _sync_current_text_from_strip(scene, strip)
+    finally:
+        props._syncing_target = False
+
+
+@persistent
+def on_depsgraph_update(scene, depsgraph):
+    del depsgraph
+
     if not scene:
         return
 
-    selected = get_selected_strip(context)
-    if not selected or getattr(selected, "type", "") != "TEXT":
+    if not getattr(scene, "subtitle_editor", None):
         return
 
-    scene_name = scene.name
-    strip_name = selected.name
-    strip_text = selected.text
-    sync_key = (scene_name, strip_name)
-
-    if sync_key in _pending_sync_keys:
+    signature = _selection_signature(scene)
+    if signature is None:
         return
 
-    _pending_sync_keys.add(sync_key)
+    previous = _selection_signature_by_scene.get(scene.name)
+    if previous == signature:
+        return
 
-    def _apply_sync():
-        try:
-            target_scene = bpy.data.scenes.get(scene_name)
-            if not target_scene:
-                return None
+    _selection_signature_by_scene[scene.name] = signature
+    _sync_edit_state_from_scene(scene)
 
-            props = getattr(target_scene, "subtitle_editor", None)
-            if not props:
-                return None
 
-            items = target_scene.text_strip_items
+def register_handlers() -> None:
+    handlers = bpy.app.handlers.depsgraph_update_post
+    if on_depsgraph_update not in handlers:
+        handlers.append(on_depsgraph_update)
 
-            def _find_index() -> int:
-                for i, item in enumerate(items):
-                    if item.name == strip_name:
-                        return i
-                return -1
 
-            match_index = _find_index()
-            if match_index < 0:
-                refresh_list(SimpleNamespace(scene=target_scene))
-                items = target_scene.text_strip_items
-                match_index = _find_index()
-
-            if match_index >= 0 and target_scene.text_strip_items_index != match_index:
-                target_scene.text_strip_items_index = match_index
-
-            if props.current_text != strip_text:
-                props._updating_text = True
-                try:
-                    props.current_text = strip_text
-                finally:
-                    props._updating_text = False
-
-            return None
-        finally:
-            _pending_sync_keys.discard(sync_key)
-
-    bpy.app.timers.register(_apply_sync, first_interval=0.0)
+def unregister_handlers() -> None:
+    handlers = bpy.app.handlers.depsgraph_update_post
+    if on_depsgraph_update in handlers:
+        handlers.remove(on_depsgraph_update)
+    _selection_signature_by_scene.clear()

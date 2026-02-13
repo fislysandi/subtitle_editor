@@ -108,15 +108,16 @@ class TextStripItem(PropertyGroup):
         start = target_strip.frame_final_start
         end = target_strip.frame_final_end
 
-        def _try_set_end(strip, new_end: int) -> None:
-            """Best-effort end-frame update across Blender strip variants."""
-            for attr in ("frame_final_end", "frame_end"):
+        def _try_set_duration(strip, duration: int) -> bool:
+            """Best-effort duration update via writable RNA properties only."""
+            for attr in ("frame_final_duration", "frame_duration"):
                 if hasattr(strip, attr):
                     try:
-                        setattr(strip, attr, new_end)
-                        return
+                        setattr(strip, attr, duration)
+                        return True
                     except Exception:
                         continue
+            return False
 
         if source == "start":
             new_start = int(self.frame_start)
@@ -124,22 +125,20 @@ class TextStripItem(PropertyGroup):
             if prev_end is not None:
                 new_start = max(new_start, prev_end)
             if new_start != start:
+                new_duration = max(1, end - new_start)
                 try:
                     target_strip.frame_start = new_start
                 except Exception:
                     pass
-                _try_set_end(target_strip, end)
+                _try_set_duration(target_strip, new_duration)
         elif source == "end":
             new_end = int(self.frame_end)
             new_end = max(new_end, start + 1)
             if next_start is not None:
                 new_end = min(new_end, next_start)
             if new_end != end:
-                try:
-                    target_strip.frame_start = start
-                except Exception:
-                    pass
-                _try_set_end(target_strip, new_end)
+                new_duration = max(1, new_end - start)
+                _try_set_duration(target_strip, new_duration)
         else:
             return
 
@@ -387,55 +386,27 @@ class SubtitleEditorProperties(PropertyGroup):
         if scene is None:
             return
 
-        items = getattr(scene, "text_strip_items", [])
-        index = getattr(scene, "text_strip_items_index", -1)
-        sequences = sequence_utils._get_sequence_collection(scene)
+        resolution = sequence_utils.resolve_edit_target_for_scene(
+            scene, allow_index_fallback=True
+        )
+        target_strip = resolution.strip
+        if not target_strip:
+            if resolution.warning:
+                print(f"[Subtitle Studio] Edit target unresolved: {resolution.warning}")
+            return
 
-        target_name = None
-        target_strip = None
+        target_strip.text = self.current_text
 
-        if sequences:
-            active_strip = getattr(scene.sequence_editor, "active_strip", None)
-            if (
-                active_strip
-                and getattr(active_strip, "type", "") == "TEXT"
-                and getattr(active_strip, "select", False)
-            ):
-                target_strip = active_strip
-
-            if target_strip is None:
-                selected_text = [
-                    s
-                    for s in sequences
-                    if getattr(s, "select", False) and s.type == "TEXT"
-                ]
-                if len(selected_text) == 1:
-                    target_strip = selected_text[0]
-
-        if target_strip is None and 0 <= index < len(items):
-            item = items[index]
-            item.text = self.current_text
-            target_name = item.name
-
-        if sequences and target_name:
-            for strip in sequences:
-                if strip.name == target_name and getattr(strip, "type", "") == "TEXT":
-                    target_strip = strip
-                    break
-
-        if sequences and target_strip is None:
-            active_strip = getattr(scene.sequence_editor, "active_strip", None)
-            if active_strip and getattr(active_strip, "type", "") == "TEXT":
-                target_strip = active_strip
-
-        if target_strip and hasattr(target_strip, "text"):
-            target_strip.text = self.current_text
-
-            # Keep list entry in sync even when text was changed directly via RNA path.
+        target_item = resolution.item
+        if target_item is None:
+            items = getattr(scene, "text_strip_items", [])
             for item in items:
                 if item.name == target_strip.name:
-                    item.text = self.current_text
+                    target_item = item
                     break
+
+        if target_item is not None:
+            target_item.text = self.current_text
 
         screen = getattr(context, "screen", None)
         if screen:
