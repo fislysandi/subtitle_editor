@@ -40,20 +40,8 @@ def _get_default_duration(scene) -> int:
     return max(1, duration)
 
 
-def _get_sequence_collection(scene):
-    if not scene.sequence_editor:
-        return None
-
-    seq_editor = scene.sequence_editor
-    for attr in ("sequences", "sequences_all", "strips"):
-        sequences = getattr(seq_editor, attr, None)
-        if sequences is not None:
-            return sequences
-    return None
-
-
 def _get_unique_strip_name(scene, base_name: str) -> str:
-    sequences = _get_sequence_collection(scene)
+    sequences = sequence_utils._get_sequence_collection(scene)
     if not sequences:
         return base_name
 
@@ -75,7 +63,7 @@ def _select_strip_by_index(context, index: int) -> bool:
 
     item = scene.text_strip_items[index]
 
-    sequences = _get_sequence_collection(scene)
+    sequences = sequence_utils._get_sequence_collection(scene)
     if sequences:
         for strip in sequences:
             strip.select = strip.name == item.name
@@ -300,7 +288,7 @@ class SUBTITLE_OT_add_strip_at_cursor(Operator):
         except AttributeError:
             pass
 
-        sequences = _get_sequence_collection(scene)
+        sequences = sequence_utils._get_sequence_collection(scene)
         if sequences:
             for s in sequences:
                 s.select = False
@@ -342,7 +330,7 @@ class SUBTITLE_OT_remove_selected_strip(Operator):
 
         item = items[index]
 
-        sequences = _get_sequence_collection(scene)
+        sequences = sequence_utils._get_sequence_collection(scene)
         if not sequences:
             self.report({"WARNING"}, "No sequence editor to remove from")
             return {"CANCELLED"}
@@ -396,7 +384,7 @@ class SUBTITLE_OT_update_text(Operator):
         item.text = new_text
 
         # Update actual strip
-        sequences = _get_sequence_collection(scene)
+        sequences = sequence_utils._get_sequence_collection(scene)
         if sequences:
             for strip in sequences:
                 if strip.name == item.name and strip.type == "TEXT":
@@ -411,7 +399,7 @@ def _jump_to_selected(context, edge: str):
     if not item:
         return False, "No subtitle selected"
 
-    sequences = _get_sequence_collection(scene)
+    sequences = sequence_utils._get_sequence_collection(scene)
     if not sequences:
         return False, "No sequence editor"
 
