@@ -271,21 +271,25 @@ class _BaseTranscribeOperator(Operator):
 
             cache_dir = file_utils.get_addon_models_dir()
             if not tm.load_model(cache_dir):
-                out_queue.put(
-                    {
-                        "type": "error",
-                        "error": (
-                            f"Model '{config['model']}' not ready. "
-                            "Download it first or check console."
-                        ),
-                    }
-                )
+                if cancel_event and cancel_event.is_set():
+                    out_queue.put(
+                        {"type": "cancelled", "message": "Transcription cancelled"}
+                    )
+                else:
+                    out_queue.put(
+                        {
+                            "type": "error",
+                            "error": (
+                                f"Model '{config['model']}' not ready. "
+                                "Download it first or check console."
+                            ),
+                        }
+                    )
                 return
 
             check_cancel()
 
             def progress_callback(progress, text):
-                check_cancel()
                 out_queue.put({"type": "progress", "progress": progress, "text": text})
 
             tm.set_progress_callback(progress_callback)
@@ -321,7 +325,12 @@ class _BaseTranscribeOperator(Operator):
         except _WorkerCancelled:
             pass
         except Exception as e:
-            out_queue.put({"type": "error", "error": str(e)})
+            if cancel_event and cancel_event.is_set():
+                out_queue.put(
+                    {"type": "cancelled", "message": "Transcription cancelled"}
+                )
+            else:
+                out_queue.put({"type": "error", "error": str(e)})
 
     def _success_message(self, count: int) -> str:
         return f"Created {count} subtitle strips"
