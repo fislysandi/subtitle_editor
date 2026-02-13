@@ -267,6 +267,7 @@ class SubtitleEditorProperties(PropertyGroup):
             ("BOTTOM", "Bottom", "Align to bottom"),
         ],
         default="BOTTOM",
+        update=lambda self, context: self._apply_live_style(context),
     )
 
     wrap_width: FloatProperty(
@@ -276,6 +277,7 @@ class SubtitleEditorProperties(PropertyGroup):
         min=0.0,
         max=1.0,
         subtype="FACTOR",
+        update=lambda self, context: self._apply_live_style(context),
     )
 
     max_chars_per_line: IntProperty(
@@ -588,6 +590,20 @@ class SubtitleEditorProperties(PropertyGroup):
         max=100,
     )
 
+    edit_frame_start: IntProperty(
+        name="Start",
+        description="Edit start frame of the currently targeted text strip",
+        default=1,
+        update=lambda self, context: self._apply_live_timing(context, source="start"),
+    )
+
+    edit_frame_end: IntProperty(
+        name="End",
+        description="Edit end frame of the currently targeted text strip",
+        default=2,
+        update=lambda self, context: self._apply_live_timing(context, source="end"),
+    )
+
     text_color: bpy.props.FloatVectorProperty(
         name="Text Color",
         description="Default text color",
@@ -845,7 +861,78 @@ class SubtitleEditorProperties(PropertyGroup):
                 )
             except AttributeError:
                 pass
+
+            try:
+                strip.align_y = self.v_align
+            except AttributeError:
+                pass
+
+            try:
+                strip.wrap_width = self.wrap_width
+            except AttributeError:
+                pass
         finally:
             self._updating_style = False
+
+        self._tag_sequence_editor_redraw(context)
+
+    def _set_strip_end(self, strip, new_end: int) -> bool:
+        for attr in ("frame_final_end", "frame_end"):
+            if hasattr(strip, attr):
+                try:
+                    setattr(strip, attr, new_end)
+                    return True
+                except Exception:
+                    continue
+        return False
+
+    def _set_strip_duration(self, strip, duration: int) -> bool:
+        for attr in ("frame_final_duration", "frame_duration"):
+            if hasattr(strip, attr):
+                try:
+                    setattr(strip, attr, duration)
+                    return True
+                except Exception:
+                    continue
+        return False
+
+    def _apply_live_timing(self, context, source: str):
+        if getattr(self, "_updating_timing", False):
+            return
+
+        scene = self._resolve_scene(context)
+        if scene is None:
+            return
+
+        resolution = sequence_utils.resolve_edit_target_for_scene(
+            scene,
+            allow_index_fallback=False,
+        )
+        strip = resolution.strip
+        if not strip:
+            return
+
+        start = int(strip.frame_final_start)
+        end = int(strip.frame_final_end)
+
+        if source == "start":
+            new_start = max(scene.frame_start, int(self.edit_frame_start))
+            new_start = min(new_start, end - 1)
+            if new_start != start:
+                strip.frame_start = new_start
+                if not self._set_strip_end(strip, end):
+                    self._set_strip_duration(strip, max(1, end - new_start))
+        elif source == "end":
+            new_end = max(start + 1, int(self.edit_frame_end))
+            if new_end != end:
+                if not self._set_strip_end(strip, new_end):
+                    self._set_strip_duration(strip, max(1, new_end - start))
+
+        self._updating_timing = True
+        try:
+            self["edit_frame_start"] = int(strip.frame_final_start)
+            self["edit_frame_end"] = int(strip.frame_final_end)
+        finally:
+            self._updating_timing = False
 
         self._tag_sequence_editor_redraw(context)

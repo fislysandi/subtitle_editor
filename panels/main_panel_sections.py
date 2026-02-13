@@ -60,7 +60,6 @@ def draw_edit_section(layout, context):
 
     resolution = sequence_utils.resolve_edit_target(context, allow_index_fallback=True)
     selected_strip = resolution.strip
-    selected_item = resolution.item
 
     layout.separator()
 
@@ -95,12 +94,8 @@ def draw_edit_section(layout, context):
         op.direction = 1
 
         row = box.row(align=True)
-        if selected_item:
-            row.prop(selected_item, "frame_start", text="Start")
-            row.prop(selected_item, "frame_end", text="End")
-        else:
-            row.label(text=f"Start {selected_strip.frame_final_start}")
-            row.label(text=f"End {selected_strip.frame_final_end}")
+        row.prop(props, "edit_frame_start", text="Start")
+        row.prop(props, "edit_frame_end", text="End")
 
         box.prop(props, "font_size")
         row = box.row(align=True)

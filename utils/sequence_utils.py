@@ -408,6 +408,37 @@ def _sync_edit_state_from_scene(scene) -> None:
             scene.text_strip_items_index = idx
         if item and item.text != strip.text:
             item.text = strip.text
+
+        props._updating_timing = True
+        try:
+            props["edit_frame_start"] = int(strip.frame_final_start)
+            props["edit_frame_end"] = int(strip.frame_final_end)
+        finally:
+            props._updating_timing = False
+
+        props._updating_style = True
+        try:
+            if hasattr(strip, "font_size"):
+                props["font_size"] = int(strip.font_size)
+            if hasattr(strip, "color"):
+                props["text_color"] = (
+                    float(strip.color[0]),
+                    float(strip.color[1]),
+                    float(strip.color[2]),
+                )
+            if hasattr(strip, "shadow_color"):
+                props["shadow_color"] = (
+                    float(strip.shadow_color[0]),
+                    float(strip.shadow_color[1]),
+                    float(strip.shadow_color[2]),
+                )
+            if hasattr(strip, "align_y"):
+                props["v_align"] = str(strip.align_y)
+            if hasattr(strip, "wrap_width"):
+                props["wrap_width"] = float(strip.wrap_width)
+        finally:
+            props._updating_style = False
+
         _sync_current_text_from_strip(scene, strip)
     finally:
         props._syncing_target = False
