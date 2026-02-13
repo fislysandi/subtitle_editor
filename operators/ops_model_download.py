@@ -118,7 +118,13 @@ class SUBTITLE_OT_download_model(Operator):
             # Check for external cancellation (via cancel button)
             if not props.is_downloading_model and not self._finished:
                 if self._download_manager:
-                    self._download_manager.cancel()
+                    current = self._download_manager.get_progress()
+                    if current.status not in (
+                        DownloadStatus.COMPLETE,
+                        DownloadStatus.ERROR,
+                        DownloadStatus.CANCELLED,
+                    ):
+                        self._download_manager.cancel()
 
             # Poll progress from download manager
             if self._download_manager:
@@ -161,6 +167,7 @@ class SUBTITLE_OT_download_model(Operator):
                     DownloadStatus.CANCELLED,
                 ):
                     self._finished = True
+                    self._apply_terminal_state(props, progress)
 
                     # Report result
                     if progress.status == DownloadStatus.COMPLETE:
@@ -194,9 +201,23 @@ class SUBTITLE_OT_download_model(Operator):
 
     def _cancel_download(self, context):
         """Cancel the download and clean up."""
+        props = context.scene.subtitle_editor
+        self._finished = True
         if self._download_manager:
             self._download_manager.cancel()
+        props.model_download_progress = 0.0
+        props.model_download_status = "Download cancelled"
         self._cleanup(context)
+
+    def _apply_terminal_state(self, props, progress) -> None:
+        """Normalize final progress state for consistent UX."""
+        if progress.status == DownloadStatus.COMPLETE:
+            props.model_download_progress = 100.0
+        elif progress.status in (DownloadStatus.ERROR, DownloadStatus.CANCELLED):
+            props.model_download_progress = 0.0
+
+        if progress.message:
+            props.model_download_status = progress.message
 
     def _cleanup(self, context):
         """Clean up timer and state."""
@@ -211,6 +232,9 @@ class SUBTITLE_OT_download_model(Operator):
 
         # End Blender's progress bar
         context.window_manager.progress_end()
+
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=0.2)
 
         # Reset state
         props.is_downloading_model = False
