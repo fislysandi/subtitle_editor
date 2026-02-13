@@ -275,6 +275,9 @@ class DownloadManager:
         if self._cancel_event.is_set():
             raise InterruptedError("Download cancelled")
 
+        # Preserve previous signal to avoid regressions/stalls when hub reports indeterminate totals.
+        current = self.get_progress()
+
         # Format nice progress message
         if total > 0:
             pct = (downloaded / total) * 100
@@ -288,13 +291,17 @@ class DownloadManager:
                 speed_str = f" - {self._format_size(int(speed))}/s"
 
             message = f"{filename}: {dl_str} / {total_str} ({pct:.0f}%){speed_str}"
+            next_downloaded = downloaded
+            next_total = total
         else:
             message = f"Downloading {filename}..."
+            next_downloaded = current.bytes_downloaded
+            next_total = current.bytes_total
 
         self._set_progress(
             status=DownloadStatus.DOWNLOADING,
-            bytes_downloaded=downloaded,
-            bytes_total=total,
+            bytes_downloaded=next_downloaded,
+            bytes_total=next_total,
             current_file=filename,
             message=message,
         )

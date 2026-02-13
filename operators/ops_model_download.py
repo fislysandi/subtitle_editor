@@ -124,15 +124,35 @@ class SUBTITLE_OT_download_model(Operator):
             if self._download_manager:
                 progress = self._download_manager.get_progress()
 
+                # Detect unexpected worker termination to avoid stalled UI state.
+                if (
+                    self._thread
+                    and not self._thread.is_alive()
+                    and progress.status
+                    not in (
+                        DownloadStatus.COMPLETE,
+                        DownloadStatus.ERROR,
+                        DownloadStatus.CANCELLED,
+                    )
+                ):
+                    progress = type(progress)(
+                        status=DownloadStatus.ERROR,
+                        bytes_downloaded=progress.bytes_downloaded,
+                        bytes_total=progress.bytes_total,
+                        current_file=progress.current_file,
+                        message="Download stopped unexpectedly. Check System Console.",
+                    )
+
                 # Update UI properties
-                props.model_download_progress = progress.percentage
+                progress_pct = progress.percentage * 100.0
+                props.model_download_progress = progress_pct
                 props.model_download_status = progress.message
 
                 # Update Blender's native status bar
                 context.workspace.status_text_set(progress.message)
 
                 # Update Blender's native progress bar (0-100)
-                context.window_manager.progress_update(int(progress.percentage * 100))
+                context.window_manager.progress_update(int(progress_pct))
 
                 # Check if complete
                 if progress.status in (
@@ -155,8 +175,10 @@ class SUBTITLE_OT_download_model(Operator):
                     return {"FINISHED"}
 
             # Force UI redraw to update progress
-            for area in context.screen.areas:
-                area.tag_redraw()
+            if context.screen:
+                for area in context.screen.areas:
+                    if area.type in {"SEQUENCE_EDITOR", "PROPERTIES"}:
+                        area.tag_redraw()
 
         # Return PASS_THROUGH to keep Blender responsive
         return {"PASS_THROUGH"}

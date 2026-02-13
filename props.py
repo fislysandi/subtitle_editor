@@ -528,9 +528,9 @@ class SubtitleEditorProperties(PropertyGroup):
 
     model_download_progress: FloatProperty(
         name="Download Progress",
-        description="Model download progress (0-1)",
+        description="Model download progress (0-100)",
         min=0.0,
-        max=1.0,
+        max=100.0,
         default=0.0,
         subtype="PERCENTAGE",
     )
