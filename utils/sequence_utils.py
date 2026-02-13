@@ -413,6 +413,26 @@ def _sync_edit_state_from_scene(scene) -> None:
         props._syncing_target = False
 
 
+def _poll_selection_sync() -> float:
+    """Timer fallback: selection changes don't always emit depsgraph updates."""
+    for scene in bpy.data.scenes:
+        if not getattr(scene, "subtitle_editor", None):
+            continue
+
+        signature = _selection_signature(scene)
+        if signature is None:
+            continue
+
+        previous = _selection_signature_by_scene.get(scene.name)
+        if previous == signature:
+            continue
+
+        _selection_signature_by_scene[scene.name] = signature
+        _sync_edit_state_from_scene(scene)
+
+    return 0.2
+
+
 @persistent
 def on_depsgraph_update(scene, depsgraph):
     del depsgraph
@@ -440,9 +460,18 @@ def register_handlers() -> None:
     if on_depsgraph_update not in handlers:
         handlers.append(on_depsgraph_update)
 
+    if not bpy.app.timers.is_registered(_poll_selection_sync):
+        bpy.app.timers.register(
+            _poll_selection_sync, first_interval=0.2, persistent=True
+        )
+
 
 def unregister_handlers() -> None:
     handlers = bpy.app.handlers.depsgraph_update_post
     if on_depsgraph_update in handlers:
         handlers.remove(on_depsgraph_update)
+
+    if bpy.app.timers.is_registered(_poll_selection_sync):
+        bpy.app.timers.unregister(_poll_selection_sync)
+
     _selection_signature_by_scene.clear()

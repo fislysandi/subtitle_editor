@@ -577,6 +577,7 @@ class SubtitleEditorProperties(PropertyGroup):
         default=24,
         min=8,
         max=200,
+        update=lambda self, context: self._apply_live_style(context),
     )
 
     nudge_step: IntProperty(
@@ -595,6 +596,7 @@ class SubtitleEditorProperties(PropertyGroup):
         min=0.0,
         max=1.0,
         default=(1.0, 1.0, 1.0),
+        update=lambda self, context: self._apply_live_style(context),
     )
 
     shadow_color: bpy.props.FloatVectorProperty(
@@ -605,6 +607,7 @@ class SubtitleEditorProperties(PropertyGroup):
         min=0.0,
         max=1.0,
         default=(0.0, 0.0, 0.0),
+        update=lambda self, context: self._apply_live_style(context),
     )
 
     preset_1_name: StringProperty(
@@ -768,3 +771,81 @@ class SubtitleEditorProperties(PropertyGroup):
         max=1.0,
         subtype="FACTOR",
     )
+
+    def _resolve_scene(self, context):
+        scene = getattr(context, "scene", None) if context else None
+        if scene:
+            return scene
+
+        owner = getattr(self, "id_data", None)
+        if isinstance(owner, bpy.types.Scene):
+            return owner
+
+        return None
+
+    def _tag_sequence_editor_redraw(self, context):
+        screen = getattr(context, "screen", None) if context else None
+        if screen:
+            for area in screen.areas:
+                if area.type == "SEQUENCE_EDITOR":
+                    area.tag_redraw()
+            return
+
+        wm = getattr(bpy.context, "window_manager", None)
+        if not wm:
+            return
+        for window in wm.windows:
+            window_screen = getattr(window, "screen", None)
+            if not window_screen:
+                continue
+            for area in window_screen.areas:
+                if area.type == "SEQUENCE_EDITOR":
+                    area.tag_redraw()
+
+    def _apply_live_style(self, context):
+        if getattr(self, "_updating_style", False):
+            return
+
+        scene = self._resolve_scene(context)
+        if scene is None:
+            return
+
+        resolution = sequence_utils.resolve_edit_target_for_scene(
+            scene,
+            allow_index_fallback=False,
+        )
+        strip = resolution.strip
+        if not strip:
+            return
+
+        self._updating_style = True
+        try:
+            try:
+                strip.font_size = self.font_size
+            except AttributeError:
+                pass
+
+            try:
+                strip.color = (
+                    self.text_color[0],
+                    self.text_color[1],
+                    self.text_color[2],
+                    1.0,
+                )
+            except AttributeError:
+                pass
+
+            try:
+                strip.use_shadow = True
+                strip.shadow_color = (
+                    self.shadow_color[0],
+                    self.shadow_color[1],
+                    self.shadow_color[2],
+                    1.0,
+                )
+            except AttributeError:
+                pass
+        finally:
+            self._updating_style = False
+
+        self._tag_sequence_editor_redraw(context)
