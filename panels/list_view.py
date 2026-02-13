@@ -24,10 +24,10 @@ class SEQUENCER_UL_List(UIList):
         fps_int = max(1, int(round(fps)))
 
         total_seconds = frame // fps_int
-        minutes = total_seconds // 60
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
         seconds = total_seconds % 60
-        frame_part = frame % fps_int
-        prefix = f"{minutes:02d}:{seconds:02d}:{frame_part:02d}"
+        prefix = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
         text = getattr(item, "text", "")
         layout.label(text=f"{prefix}  {text}")
