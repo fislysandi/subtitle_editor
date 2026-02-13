@@ -292,6 +292,11 @@ class SUBTITLE_OT_install_pytorch(Operator):
         try:
             # Base PyTorch packages
             packages = ["torch", "torchaudio"]
+            cuda_runtime_packages = [
+                "nvidia-cuda-runtime-cu12",
+                "nvidia-cublas-cu12",
+                "nvidia-cudnn-cu12",
+            ]
 
             # Determine installation method based on selection
             index_url = None
@@ -370,6 +375,46 @@ class SUBTITLE_OT_install_pytorch(Operator):
                     props, "pytorch_install_status", "PyTorch installed successfully!"
                 ),
             )
+
+            # Install CUDA runtime libraries required by faster-whisper/ctranslate2.
+            # This prevents runtime failures like missing libcublas.so.12.
+            if pytorch_version in {"cu118", "cu121", "cu124"}:
+                _schedule_scene_update(
+                    scene_name,
+                    lambda props: setattr(
+                        props,
+                        "pytorch_install_status",
+                        "Installing CUDA runtime libraries for transcription...",
+                    ),
+                )
+
+                runtime_cmd = DependencyManager.get_install_command(
+                    cuda_runtime_packages,
+                    use_uv=use_uv,
+                )
+
+                print(f"Running command: {' '.join(runtime_cmd)}")
+                runtime_result = subprocess.run(runtime_cmd, check=False)
+
+                if runtime_result.returncode != 0:
+                    _schedule_scene_update(
+                        scene_name,
+                        lambda props: setattr(
+                            props,
+                            "pytorch_install_status",
+                            "Error: CUDA runtime library install failed. Check System Console.",
+                        ),
+                    )
+                    return
+
+                _schedule_scene_update(
+                    scene_name,
+                    lambda props: setattr(
+                        props,
+                        "pytorch_install_status",
+                        "PyTorch + CUDA runtime libraries installed successfully!",
+                    ),
+                )
 
             # Re-check dependencies to update torch status
             bpy.app.timers.register(
