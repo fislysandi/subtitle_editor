@@ -76,12 +76,38 @@ class TranscriptionManager:
             os.environ["LD_LIBRARY_PATH"] = ":".join(merged)
 
         # Preload commonly missing CUDA libs so ctranslate2/faster-whisper can resolve them.
-        for lib_name in ("libcudart.so.12", "libcublas.so.12", "libcudnn.so.9"):
+        # Use absolute paths first because runtime LD_LIBRARY_PATH changes are not always honored.
+        preload_order = (
+            "libcudart.so.12",
+            "libnvrtc.so.12",
+            "libnvJitLink.so.12",
+            "libcublasLt.so.12",
+            "libcublas.so.12",
+            "libcudnn.so.9",
+            "libcufft.so.11",
+        )
+
+        def _try_load(lib_identifier: str) -> bool:
             try:
-                ctypes.CDLL(lib_name, mode=ctypes.RTLD_GLOBAL)
+                ctypes.CDLL(lib_identifier, mode=ctypes.RTLD_GLOBAL)
+                return True
             except OSError:
-                # Keep best-effort behavior; detailed errors are handled in load_model().
-                pass
+                return False
+
+        for lib_name in preload_order:
+            loaded = False
+
+            for lib_dir in lib_dirs:
+                candidate = os.path.join(lib_dir, lib_name)
+                if os.path.exists(candidate) and _try_load(candidate):
+                    loaded = True
+                    break
+
+            if loaded:
+                continue
+
+            # Fallback to loader lookup by library name.
+            _try_load(lib_name)
 
     def load_model(self, cache_dir: Optional[str] = None) -> bool:
         """Load the Whisper model
@@ -196,7 +222,8 @@ class TranscriptionManager:
                 self.last_error = (
                     "CUDA runtime library missing/unloadable (libcublas.so.12). "
                     "Reinstall PyTorch from addon, ensure CUDA runtime deps are installed, "
-                    "then restart Blender."
+                    "then restart Blender. If it persists, launch Blender from a shell with "
+                    "LD_LIBRARY_PATH including site-packages/nvidia/*/lib."
                 )
                 print(
                     "Error: CUDA runtime library missing/unloadable (libcublas.so.12)"
