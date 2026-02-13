@@ -345,13 +345,16 @@ class _BaseTranscribeOperator(Operator):
                         {"type": "cancelled", "message": "Transcription cancelled"}
                     )
                 else:
+                    failure_reason = tm.last_error.strip() if tm.last_error else ""
+                    if not failure_reason:
+                        failure_reason = (
+                            f"Model '{config['model']}' not ready. "
+                            "Download it first or check console."
+                        )
                     out_queue.put(
                         {
                             "type": "error",
-                            "error": (
-                                f"Model '{config['model']}' not ready. "
-                                "Download it first or check console."
-                            ),
+                            "error": failure_reason,
                         }
                     )
                 return

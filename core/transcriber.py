@@ -6,8 +6,10 @@ This module has NO Blender dependencies.
 """
 
 import os
+import sys
 import tempfile
 import wave
+import ctypes
 from pathlib import Path
 from typing import Iterator, List, Dict, Optional, Callable, Any
 from dataclasses import dataclass
@@ -44,6 +46,42 @@ class TranscriptionManager:
         self.compute_type = compute_type
         self.model = None
         self._progress_callback = None
+        self.last_error: str = ""
+
+    def _prepare_cuda_runtime(self) -> None:
+        """Best-effort CUDA runtime setup for pip/uv-installed NVIDIA libs."""
+        if self.device != "cuda":
+            return
+
+        lib_dirs = []
+        for base in sys.path:
+            base_path = Path(base)
+            for rel in (
+                ("nvidia", "cuda_runtime", "lib"),
+                ("nvidia", "cublas", "lib"),
+                ("nvidia", "cudnn", "lib"),
+                ("nvidia", "cufft", "lib"),
+            ):
+                candidate = base_path.joinpath(*rel)
+                if candidate.is_dir():
+                    lib_dirs.append(str(candidate))
+
+        if lib_dirs:
+            existing = os.environ.get("LD_LIBRARY_PATH", "")
+            existing_parts = [p for p in existing.split(":") if p]
+            merged = []
+            for path in lib_dirs + existing_parts:
+                if path not in merged:
+                    merged.append(path)
+            os.environ["LD_LIBRARY_PATH"] = ":".join(merged)
+
+        # Preload commonly missing CUDA libs so ctranslate2/faster-whisper can resolve them.
+        for lib_name in ("libcudart.so.12", "libcublas.so.12", "libcudnn.so.9"):
+            try:
+                ctypes.CDLL(lib_name, mode=ctypes.RTLD_GLOBAL)
+            except OSError:
+                # Keep best-effort behavior; detailed errors are handled in load_model().
+                pass
 
     def load_model(self, cache_dir: Optional[str] = None) -> bool:
         """Load the Whisper model
@@ -54,6 +92,7 @@ class TranscriptionManager:
         Returns:
             True if model loaded successfully
         """
+        self.last_error = ""
         try:
             from faster_whisper import WhisperModel
 
@@ -65,6 +104,8 @@ class TranscriptionManager:
                     self.device = "cuda"
                 else:
                     self.device = "cpu"
+
+            self._prepare_cuda_runtime()
 
             # Determine model path
             model_path_or_size = self.model_name
@@ -139,17 +180,35 @@ class TranscriptionManager:
 
         except Exception as e:
             error_msg = str(e)
+            self.last_error = error_msg
 
             # Provide user-friendly error messages
             if "float16" in error_msg and "not support" in error_msg:
+                self.last_error = (
+                    f"float16 compute type not supported on {self.device}. "
+                    "Use int8 or float32."
+                )
                 print(f"Error: float16 compute type not supported on {self.device}")
                 print(
                     f"Recommendation: Use 'int8' for CPU or 'float32' for broader compatibility"
+                )
+            elif "libcublas.so.12" in error_msg or "cannot be loaded" in error_msg:
+                self.last_error = (
+                    "CUDA runtime library missing/unloadable (libcublas.so.12). "
+                    "Reinstall PyTorch from addon, ensure CUDA runtime deps are installed, "
+                    "then restart Blender."
+                )
+                print(
+                    "Error: CUDA runtime library missing/unloadable (libcublas.so.12)"
+                )
+                print(
+                    "Recommendation: Reinstall PyTorch and CUDA runtime deps from addon, then restart Blender."
                 )
             elif (
                 "No such file or directory" in error_msg
                 or "does not appear to have a file named" in error_msg
             ):
+                self.last_error = f"Model '{self.model_name}' files are missing. Download/re-download the model."
                 print(f"Error: Model '{self.model_name}' not found.")
                 print(f"Please download the model using the 'Download Model' button.")
             else:
