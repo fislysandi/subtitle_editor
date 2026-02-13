@@ -103,6 +103,30 @@ def get_selected_strip(context) -> Optional[Any]:
     return None
 
 
+def get_selected_media_strip(context) -> Optional[Any]:
+    """Get selected media strip (MOVIE/SOUND), preferring active strip."""
+    sequences = _get_sequence_collection(context.scene)
+    if not sequences:
+        return None
+
+    active = None
+    if context.scene.sequence_editor:
+        active = getattr(context.scene.sequence_editor, "active_strip", None)
+
+    if active and getattr(active, "type", "") in {"MOVIE", "SOUND"}:
+        return active
+
+    selected_media = [
+        s
+        for s in sequences
+        if getattr(s, "select", False) and s.type in {"MOVIE", "SOUND"}
+    ]
+    if len(selected_media) == 1:
+        return selected_media[0]
+
+    return None
+
+
 def resolve_edit_target(
     context, allow_index_fallback: bool = True
 ) -> EditTargetResolution:

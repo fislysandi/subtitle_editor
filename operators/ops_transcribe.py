@@ -51,7 +51,7 @@ class _BaseTranscribeOperator(Operator):
             self.report({"WARNING"}, "Transcription already in progress")
             return {"CANCELLED"}
 
-        strip = sequence_utils.get_selected_strip(context)
+        strip = sequence_utils.get_selected_media_strip(context)
         if not strip:
             self.report({"ERROR"}, "Please select an audio or video strip")
             return {"CANCELLED"}
