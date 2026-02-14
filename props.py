@@ -311,32 +311,32 @@ class SubtitleEditorProperties(PropertyGroup):
     # VAD Parameters (Advanced)
     vad_threshold: FloatProperty(
         name="Threshold",
-        description="Speech probability threshold (lower = more sensitive). Tuning for music: try 0.3-0.4",
-        default=0.5,
+        description="Speech probability threshold (lower = more sensitive and captures quieter speech)",
+        default=0.35,
         min=0.0,
         max=1.0,
     )
 
     min_speech_duration_ms: IntProperty(
         name="Min Speech (ms)",
-        description="Minimum duration of speech segments. Decrease for fast lyrics.",
-        default=250,
+        description="Minimum duration of speech segments. Lower values keep short spoken words.",
+        default=120,
         min=0,
         max=5000,
     )
 
     min_silence_duration_ms: IntProperty(
         name="Min Silence (ms)",
-        description="Minimum duration of silence to split speech. Decrease to split lyrics better.",
-        default=2000,
+        description="Minimum silence needed to split speech segments. Lower values preserve conversational flow.",
+        default=700,
         min=0,
         max=10000,
     )
 
     speech_pad_ms: IntProperty(
         name="Speech Padding (ms)",
-        description="Padding added to speech segments",
-        default=400,
+        description="Padding added around speech boundaries to avoid clipped words",
+        default=500,
         min=0,
         max=2000,
     )
