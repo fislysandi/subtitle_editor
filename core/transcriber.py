@@ -365,6 +365,10 @@ class TranscriptionManager:
         except Exception:
             return 0.0
 
+    def get_audio_duration(self, audio_path: str) -> float:
+        """Public wrapper for audio duration estimation."""
+        return self._get_audio_duration(audio_path)
+
     @staticmethod
     def extract_audio(video_path: str, output_path: Optional[str] = None) -> str:
         """Extract audio from video file

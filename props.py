@@ -333,12 +333,26 @@ class SubtitleEditorProperties(PropertyGroup):
         max=10000,
     )
 
+    max_speech_duration_s: FloatProperty(
+        name="Max Speech (s)",
+        description="Maximum speech segment duration before forced split (helps separate music-heavy spans)",
+        default=15.0,
+        min=1.0,
+        max=60.0,
+    )
+
     speech_pad_ms: IntProperty(
         name="Speech Padding (ms)",
         description="Padding added around speech boundaries to avoid clipped words",
         default=500,
         min=0,
         max=2000,
+    )
+
+    vad_retry_on_low_recall: BoolProperty(
+        name="Auto Retry VAD",
+        description="Automatically retry transcription with relaxed VAD when too much speech is missed",
+        default=True,
     )
 
     # UI State
