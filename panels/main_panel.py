@@ -8,6 +8,19 @@ from bpy.types import Panel
 from . import main_panel_sections
 
 
+def _whisper_section_descriptors():
+    """Declarative section order for whisper panel."""
+    return (
+        "dependencies",
+        "pytorch",
+        "model",
+        "hardware",
+        "input",
+        "output",
+        "actions",
+    )
+
+
 class SEQUENCER_PT_panel(Panel):
     """Main Subtitle Studio Panel"""
 
@@ -59,23 +72,19 @@ class SEQUENCER_PT_whisper_panel(Panel):
         if props.is_transcribing:
             self._draw_transcription_progress(layout, props)
 
-        # Dependencies Section
         col = layout.column()
-        self._draw_dependencies_section(col, props)
+        section_drawers = {
+            "dependencies": self._draw_dependencies_section,
+            "pytorch": self._draw_pytorch_section,
+            "model": self._draw_model_section,
+            "hardware": self._draw_hardware_settings,
+            "input": self._draw_input_settings,
+            "output": self._draw_output_settings,
+            "actions": self._draw_actions_section,
+        }
 
-        # PyTorch Section
-        self._draw_pytorch_section(col, props)
-
-        # Model Section
-        self._draw_model_section(col, props)
-
-        # Settings Section (Issue #3: Group settings logically)
-        self._draw_hardware_settings(col, props)
-        self._draw_input_settings(col, props)
-        self._draw_output_settings(col, props)
-
-        # Actions Section (Issue #5: Improve action button hierarchy)
-        self._draw_actions_section(col, props)
+        for section in _whisper_section_descriptors():
+            section_drawers[section](col, props)
 
     def _draw_transcription_progress(self, layout, props):
         """Draw transcription progress UI with progress bar and status."""

@@ -6,6 +6,25 @@ import bpy
 from ..utils import sequence_utils
 
 
+_LIST_ACTION_DESCRIPTORS = (
+    ("subtitle.refresh_list", "FILE_REFRESH"),
+    None,
+    ("subtitle.import_subtitles", "IMPORT"),
+    ("subtitle.export_subtitles", "EXPORT"),
+    None,
+    ("subtitle.add_strip_at_cursor", "ADD"),
+    ("subtitle.remove_selected_strip", "REMOVE"),
+    None,
+    ("subtitle.select_next_strip", "TRIA_UP"),
+    ("subtitle.select_previous_strip", "TRIA_DOWN"),
+)
+
+_NUDGE_ROW_DESCRIPTORS = (
+    ("Start", "START"),
+    ("End", "END"),
+)
+
+
 def _log_panel_error(panel: str, section: str, exc: Exception) -> None:
     message = f"{panel}::{section} failed: {exc}"
     print(f"[Subtitle Studio] {message}")
@@ -39,17 +58,27 @@ def draw_list_section(layout, context):
     )
 
     button_col = row.column(align=True)
-    button_col.operator("subtitle.refresh_list", text="", icon="FILE_REFRESH")
+    for descriptor in _LIST_ACTION_DESCRIPTORS:
+        if descriptor is None:
+            button_col.separator()
+            continue
+        operator_id, icon = descriptor
+        button_col.operator(operator_id, text="", icon=icon)
+
     button_col.separator()
-    button_col.operator("subtitle.import_subtitles", text="", icon="IMPORT")
-    button_col.operator("subtitle.export_subtitles", text="", icon="EXPORT")
-    button_col.separator()
-    button_col.operator("subtitle.add_strip_at_cursor", text="", icon="ADD")
-    button_col.operator("subtitle.remove_selected_strip", text="", icon="REMOVE")
-    button_col.separator()
-    button_col.operator("subtitle.select_next_strip", text="", icon="TRIA_UP")
-    button_col.operator("subtitle.select_previous_strip", text="", icon="TRIA_DOWN")
-    button_col.separator()
+
+
+def _draw_nudge_row(box, label: str, edge: str) -> None:
+    row = box.row(align=True)
+    row.operator(f"subtitle.jump_to_selected_{label.lower()}", text=label, icon="TIME")
+
+    op = row.operator("subtitle.nudge_strip", text="-", icon="TRIA_LEFT")
+    op.edge = edge
+    op.direction = -1
+
+    op = row.operator("subtitle.nudge_strip", text="+", icon="TRIA_RIGHT")
+    op.edge = edge
+    op.direction = 1
 
 
 def draw_edit_section(layout, context):
@@ -75,23 +104,8 @@ def draw_edit_section(layout, context):
         row = box.row(align=True)
         row.prop(props, "nudge_step", text="Step")
 
-        row = box.row(align=True)
-        row.operator("subtitle.jump_to_selected_start", text="Start", icon="TIME")
-        op = row.operator("subtitle.nudge_strip", text="-", icon="TRIA_LEFT")
-        op.edge = "START"
-        op.direction = -1
-        op = row.operator("subtitle.nudge_strip", text="+", icon="TRIA_RIGHT")
-        op.edge = "START"
-        op.direction = 1
-
-        row = box.row(align=True)
-        row.operator("subtitle.jump_to_selected_end", text="End", icon="TIME")
-        op = row.operator("subtitle.nudge_strip", text="-", icon="TRIA_LEFT")
-        op.edge = "END"
-        op.direction = -1
-        op = row.operator("subtitle.nudge_strip", text="+", icon="TRIA_RIGHT")
-        op.edge = "END"
-        op.direction = 1
+        for label, edge in _NUDGE_ROW_DESCRIPTORS:
+            _draw_nudge_row(box, label, edge)
 
         row = box.row(align=True)
         row.prop(props, "edit_frame_start", text="Start")
