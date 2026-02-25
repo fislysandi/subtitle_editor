@@ -2,13 +2,22 @@
 Import/Export Operators
 """
 
+import logging
+
 import bpy
 from bpy.types import Operator
 from bpy.props import StringProperty, EnumProperty
 from bpy_extras.io_utils import ImportHelper, ExportHelper
 
 from ..core.subtitle_io import SubtitleIO, SubtitleEntry
+from ..hardening.error_boundary import (
+    boundary_failure_from_exception,
+    execute_with_boundary,
+)
 from ..utils import sequence_utils
+
+
+logger = logging.getLogger(__name__)
 
 
 class SUBTITLE_OT_import_subtitles(Operator, ImportHelper):
@@ -25,7 +34,18 @@ class SUBTITLE_OT_import_subtitles(Operator, ImportHelper):
     def execute(self, context):
         try:
             # Load subtitles
-            entries = SubtitleIO.load(self.filepath)
+            load_result = execute_with_boundary(
+                "subtitle.import.load",
+                lambda: SubtitleIO.load(self.filepath),
+                logger,
+                context={"filepath": self.filepath},
+                fallback_message="Import failed. Please verify subtitle format and file access.",
+            )
+            if not load_result.ok:
+                self.report({"ERROR"}, load_result.user_message)
+                return {"CANCELLED"}
+
+            entries = load_result.value
 
             # Create text strips
             scene = context.scene
@@ -58,7 +78,14 @@ class SUBTITLE_OT_import_subtitles(Operator, ImportHelper):
             return {"FINISHED"}
 
         except Exception as e:
-            self.report({"ERROR"}, f"Import failed: {str(e)}")
+            fail_result = boundary_failure_from_exception(
+                "subtitle.import.execute",
+                e,
+                logger,
+                context={"filepath": self.filepath},
+                fallback_message="Import failed. Please check the selected file and try again.",
+            )
+            self.report({"ERROR"}, fail_result.user_message)
             return {"CANCELLED"}
 
 
@@ -122,7 +149,20 @@ class SUBTITLE_OT_export_subtitles(Operator, ExportHelper):
                     fmt = ".srt"  # Default
 
             # Save
-            SubtitleIO.save(self.filepath, entries, fmt)
+            save_result = execute_with_boundary(
+                "subtitle.export.save",
+                lambda: SubtitleIO.save(self.filepath, entries, fmt),
+                logger,
+                context={
+                    "filepath": self.filepath,
+                    "format": fmt,
+                    "entry_count": len(entries),
+                },
+                fallback_message="Export failed. Please verify destination path and format.",
+            )
+            if not save_result.ok:
+                self.report({"ERROR"}, save_result.user_message)
+                return {"CANCELLED"}
 
             self.report(
                 {"INFO"}, f"Exported {len(entries)} subtitles to {self.filepath}"
@@ -130,5 +170,12 @@ class SUBTITLE_OT_export_subtitles(Operator, ExportHelper):
             return {"FINISHED"}
 
         except Exception as e:
-            self.report({"ERROR"}, f"Export failed: {str(e)}")
+            fail_result = boundary_failure_from_exception(
+                "subtitle.export.execute",
+                e,
+                logger,
+                context={"filepath": self.filepath},
+                fallback_message="Export failed. Please check settings and try again.",
+            )
+            self.report({"ERROR"}, fail_result.user_message)
             return {"CANCELLED"}
