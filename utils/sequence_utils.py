@@ -8,6 +8,8 @@ import bpy
 from bpy.app.handlers import persistent
 from typing import Optional, List, Any, NamedTuple
 
+from ..core.sequence_sync_plan import build_editor_sync_plan
+
 
 _selection_signature_by_scene = {}
 _last_multi_selection_by_scene = {}
@@ -707,39 +709,30 @@ def _sync_edit_state_from_scene(scene) -> None:
         if item and item.text != strip.text:
             item.text = strip.text
 
+        sync_plan = build_editor_sync_plan(strip, props.get("v_align", ""))
+
         props._updating_timing = True
         try:
-            props["edit_frame_start"] = int(strip.frame_final_start)
-            props["edit_frame_end"] = int(strip.frame_final_end)
+            props["edit_frame_start"] = sync_plan.timing.frame_start
+            props["edit_frame_end"] = sync_plan.timing.frame_end
         finally:
             props._updating_timing = False
 
         props._updating_style = True
         try:
-            if hasattr(strip, "font_size"):
-                props["font_size"] = int(strip.font_size)
-            if hasattr(strip, "color"):
-                props["text_color"] = (
-                    float(strip.color[0]),
-                    float(strip.color[1]),
-                    float(strip.color[2]),
-                )
+            if sync_plan.style.font_size is not None:
+                props["font_size"] = sync_plan.style.font_size
+            if sync_plan.style.text_color is not None:
+                props["text_color"] = sync_plan.style.text_color
                 props["use_text_color"] = True
-            if hasattr(strip, "outline_color"):
-                props["outline_color"] = (
-                    float(strip.outline_color[0]),
-                    float(strip.outline_color[1]),
-                    float(strip.outline_color[2]),
-                )
-            if hasattr(strip, "use_outline"):
-                props["use_outline_color"] = bool(strip.use_outline)
-            if hasattr(strip, "align_y"):
-                align_value = str(strip.align_y)
-                if props.get("v_align", "") != "CUSTOM":
-                    if align_value in {"TOP", "CENTER", "BOTTOM", "CUSTOM"}:
-                        props["v_align"] = align_value
-            if hasattr(strip, "wrap_width"):
-                props["wrap_width"] = float(strip.wrap_width)
+            if sync_plan.style.outline_color is not None:
+                props["outline_color"] = sync_plan.style.outline_color
+            if sync_plan.style.use_outline_color is not None:
+                props["use_outline_color"] = sync_plan.style.use_outline_color
+            if sync_plan.style.v_align is not None:
+                props["v_align"] = sync_plan.style.v_align
+            if sync_plan.style.wrap_width is not None:
+                props["wrap_width"] = sync_plan.style.wrap_width
         finally:
             props._updating_style = False
 
