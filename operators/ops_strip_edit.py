@@ -2,7 +2,6 @@
 Strip Edit Operators
 """
 
-import bpy
 from bpy.types import Operator
 
 from ..utils import sequence_utils
