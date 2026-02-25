@@ -54,20 +54,6 @@ def _find_text_strip_by_name(scene, strip_name: str) -> Optional[Any]:
     return None
 
 
-def _find_text_strip_by_name_recursive(strips, strip_name: str) -> Optional[Any]:
-    for strip in strips:
-        strip_type = getattr(strip, "type", "")
-        if strip_type == "TEXT" and getattr(strip, "name", "") == strip_name:
-            return strip
-        if strip_type == "META":
-            meta_sequences = getattr(strip, "sequences", None)
-            if meta_sequences:
-                found = _find_text_strip_by_name_recursive(meta_sequences, strip_name)
-                if found:
-                    return found
-    return None
-
-
 def get_cached_multi_selected_text_strips(context) -> List[Any]:
     scene = getattr(context, "scene", None)
     if not scene:
@@ -81,12 +67,134 @@ def get_cached_multi_selected_text_strips(context) -> List[Any]:
     if not sequences:
         return []
 
+    by_name = {
+        strip.name: strip for strip in sequences if getattr(strip, "type", "") == "TEXT"
+    }
+
     resolved = []
     for name in cached_names:
-        strip = _find_text_strip_by_name_recursive(sequences, name)
+        strip = by_name.get(name)
         if strip is not None:
             resolved.append(strip)
     return resolved
+
+
+def get_last_signature_multi_selected_text_strips(context) -> List[Any]:
+    """Get last observed multi-selection from sync signature in current scope."""
+    scene = getattr(context, "scene", None)
+    if not scene:
+        return []
+
+    signature = _selection_signature_by_scene.get(scene.name)
+    if not signature:
+        return []
+
+    _, selected_names, _, _, _, _ = signature
+    if len(selected_names) <= 1:
+        return []
+
+    sequences = _get_sequence_collection(scene)
+    if not sequences:
+        return []
+
+    by_name = {
+        strip.name: strip for strip in sequences if getattr(strip, "type", "") == "TEXT"
+    }
+
+    resolved = []
+    for name in selected_names:
+        strip = by_name.get(name)
+        if strip is not None:
+            resolved.append(strip)
+    return resolved
+
+
+def get_panel_list_multi_selected_text_strips(scene) -> List[Any]:
+    """Get multi-selection from panel list cache in current scope."""
+    items = getattr(scene, "text_strip_items", None)
+    if not items:
+        return []
+
+    selected_names = tuple(
+        item.name for item in items if getattr(item, "is_selected", False)
+    )
+    if len(selected_names) <= 1:
+        return []
+
+    sequences = _get_sequence_collection(scene)
+    if not sequences:
+        return []
+
+    by_name = {
+        strip.name: strip for strip in sequences if getattr(strip, "type", "") == "TEXT"
+    }
+
+    resolved = []
+    for name in selected_names:
+        strip = by_name.get(name)
+        if strip is not None:
+            resolved.append(strip)
+    return resolved
+
+
+def get_selected_text_strips_in_current_scope(scene) -> List[Any]:
+    """Get selected TEXT strips only from current editable collection."""
+    sequences = _get_sequence_collection(scene)
+    if not sequences:
+        return []
+
+    return [
+        strip
+        for strip in sequences
+        if getattr(strip, "type", "") == "TEXT" and getattr(strip, "select", False)
+    ]
+
+
+def get_selected_text_strips_from_sequencer_context(scene) -> List[Any]:
+    """Read selected TEXT strips via SEQUENCE_EDITOR context override."""
+    sequences = _get_sequence_collection(scene)
+    if not sequences:
+        return []
+
+    by_name = {
+        strip.name: strip for strip in sequences if getattr(strip, "type", "") == "TEXT"
+    }
+    if not by_name:
+        return []
+
+    selected_names = set()
+    wm = getattr(bpy.context, "window_manager", None)
+    windows = getattr(wm, "windows", []) if wm else []
+
+    for window in windows:
+        screen = getattr(window, "screen", None)
+        if not screen:
+            continue
+
+        for area in screen.areas:
+            if getattr(area, "type", "") != "SEQUENCE_EDITOR":
+                continue
+
+            region = next((r for r in area.regions if r.type == "WINDOW"), None)
+            if not region:
+                continue
+
+            try:
+                with bpy.context.temp_override(
+                    window=window,
+                    area=area,
+                    region=region,
+                    scene=scene,
+                ):
+                    for strip in getattr(bpy.context, "selected_sequences", []):
+                        if getattr(strip, "type", "") == "TEXT":
+                            name = getattr(strip, "name", "")
+                            if name in by_name:
+                                selected_names.add(name)
+            except Exception:
+                continue
+
+    return [by_name[name] for name in sorted(selected_names)]
 
 
 def _find_list_item_for_strip(scene, strip_name: str):
@@ -121,19 +229,15 @@ def _set_single_strip_selected(scene, target_strip) -> None:
     if not sequences:
         return
 
-    seq_editor = getattr(scene, "sequence_editor", None)
-    strips_all = getattr(seq_editor, "strips_all", None)
-    if strips_all:
-        selected_before = tuple(
-            sorted(
-                strip.name
-                for strip in strips_all
-                if getattr(strip, "type", "") == "TEXT"
-                and getattr(strip, "select", False)
-            )
+    selected_before = tuple(
+        sorted(
+            strip.name
+            for strip in sequences
+            if getattr(strip, "type", "") == "TEXT" and getattr(strip, "select", False)
         )
-        if len(selected_before) > 1:
-            _last_multi_selection_by_scene[scene.name] = selected_before
+    )
+    if len(selected_before) > 1:
+        _last_multi_selection_by_scene[scene.name] = selected_before
 
     for strip in sequences:
         strip.select = strip == target_strip
@@ -373,6 +477,7 @@ def refresh_list(context):
 
     # Get the designated subtitle channel from settings
     subtitle_channel = props.subtitle_channel
+    selected_text_names = []
 
     # Add only text strips that are on the subtitle channel
     for strip in sequences:
@@ -384,6 +489,13 @@ def refresh_list(context):
             item.frame_end = strip.frame_final_end
             item.channel = strip.channel
             item.is_selected = strip.select
+            if strip.select:
+                selected_text_names.append(strip.name)
+
+    if len(selected_text_names) > 1:
+        _last_multi_selection_by_scene[context.scene.name] = tuple(
+            sorted(selected_text_names)
+        )
 
 
 def get_text_strips(scene) -> List[Any]:
@@ -415,19 +527,13 @@ def on_text_strip_index_update(self, context):
         item = items[index]
         strip = _find_text_strip_by_name(scene, item.name)
 
-        seq_editor = getattr(scene, "sequence_editor", None)
-        strips_all = getattr(seq_editor, "strips_all", None)
-        selected_text_names = ()
-        if strips_all:
-            selected_text_names = tuple(
-                sorted(
-                    s.name
-                    for s in strips_all
-                    if getattr(s, "type", "") == "TEXT" and getattr(s, "select", False)
-                )
+        selected_text_names = tuple(
+            sorted(
+                strip.name for strip in get_selected_text_strips_in_current_scope(scene)
             )
-            if len(selected_text_names) > 1:
-                _last_multi_selection_by_scene[scene.name] = selected_text_names
+        )
+        if len(selected_text_names) > 1:
+            _last_multi_selection_by_scene[scene.name] = selected_text_names
 
         props._syncing_target = True
         try:

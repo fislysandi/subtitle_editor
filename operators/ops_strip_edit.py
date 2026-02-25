@@ -3,6 +3,7 @@ Strip Edit Operators
 """
 
 import bpy
+import os
 from bpy.types import Operator
 
 from ..utils import sequence_utils
@@ -676,10 +677,23 @@ class SUBTITLE_OT_copy_style_from_active(Operator):
         "align_x",
         "align_y",
     )
+    _DEBUG_ENV = "SUBTITLE_STUDIO_COPY_STYLE_DEBUG"
+
+    @classmethod
+    def _is_debug_enabled(cls, context) -> bool:
+        props = getattr(getattr(context, "scene", None), "subtitle_editor", None)
+        if props:
+            for attr_name in ("copy_style_debug", "debug_copy_style", "debug_mode"):
+                if hasattr(props, attr_name):
+                    return bool(getattr(props, attr_name))
+
+        env_value = os.getenv(cls._DEBUG_ENV, "")
+        return env_value.lower() in {"1", "true", "yes", "on"}
 
     @staticmethod
-    def _debug(message: str) -> None:
-        print(f"[Subtitle Studio][CopyStyle] {message}")
+    def _debug(enabled: bool, message: str) -> None:
+        if enabled:
+            print(f"[Subtitle Studio][CopyStyle] {message}")
 
     @staticmethod
     def _normalize_value(value):
@@ -742,12 +756,15 @@ class SUBTITLE_OT_copy_style_from_active(Operator):
             self.report({"WARNING"}, "Open the Sequencer to copy styles")
             return {"CANCELLED"}
 
-        self._debug("Button pressed")
+        debug_enabled = self._is_debug_enabled(context)
+
+        self._debug(debug_enabled, "Button pressed")
         self._debug(
+            debug_enabled,
             "Context active strip candidates: "
             f"active_sequence_strip={getattr(getattr(context, 'active_sequence_strip', None), 'name', None)}, "
             f"active_sequence={getattr(getattr(context, 'active_sequence', None), 'name', None)}, "
-            f"scene.active_strip={getattr(getattr(scene.sequence_editor, 'active_strip', None), 'name', None)}"
+            f"scene.active_strip={getattr(getattr(scene.sequence_editor, 'active_strip', None), 'name', None)}",
         )
 
         active_candidates = [
@@ -766,48 +783,91 @@ class SUBTITLE_OT_copy_style_from_active(Operator):
             self.report({"WARNING"}, "Select a text strip to copy from")
             return {"CANCELLED"}
 
-        strips_all = getattr(scene.sequence_editor, "strips_all", None)
-        selected = []
-        if strips_all:
-            selected = [
-                strip
-                for strip in strips_all
-                if getattr(strip, "type", "") == "TEXT"
-                and getattr(strip, "select", False)
-            ]
+        scope_selected = sequence_utils.get_selected_text_strips_in_current_scope(scene)
+        context_editable_selected = []
+        context_selected = []
+        override_selected = []
+        cached_selected = []
+        signature_selected = []
+        panel_selected = []
+
+        selected = scope_selected
         if not selected:
-            selected = [
+            scope_sequences = sequence_utils._get_sequence_collection(scene) or []
+            scope_names = {
+                getattr(strip, "name", "")
+                for strip in scope_sequences
+                if getattr(strip, "type", "") == "TEXT"
+            }
+
+            context_editable_selected = [
                 strip
                 for strip in getattr(context, "selected_editable_sequences", [])
                 if getattr(strip, "type", "") == "TEXT"
+                and getattr(strip, "name", "") in scope_names
             ]
+            selected = context_editable_selected
+
         if not selected:
-            selected = [
+            scope_sequences = sequence_utils._get_sequence_collection(scene) or []
+            scope_names = {
+                getattr(strip, "name", "")
+                for strip in scope_sequences
+                if getattr(strip, "type", "") == "TEXT"
+            }
+
+            context_selected = [
                 strip
                 for strip in getattr(context, "selected_sequences", [])
                 if getattr(strip, "type", "") == "TEXT"
+                and getattr(strip, "name", "") in scope_names
             ]
+            selected = context_selected
+
+        if not selected:
+            override_selected = (
+                sequence_utils.get_selected_text_strips_from_sequencer_context(scene)
+            )
+            selected = override_selected
 
         if len(selected) <= 1:
             cached_selected = sequence_utils.get_cached_multi_selected_text_strips(
                 context
             )
-            cache_has_active = any(
-                getattr(strip, "name", "") == active_strip.name
-                for strip in cached_selected
+            signature_selected = (
+                sequence_utils.get_last_signature_multi_selected_text_strips(context)
             )
-            if len(cached_selected) > 1 and cache_has_active:
+            panel_selected = sequence_utils.get_panel_list_multi_selected_text_strips(
+                scene
+            )
+            if len(cached_selected) > 1:
                 self._debug(
+                    debug_enabled,
                     "Using cached multi-selection snapshot: "
-                    f"count={len(cached_selected)} names={[s.name for s in cached_selected[:10]]}"
+                    f"count={len(cached_selected)} names={[s.name for s in cached_selected[:10]]}",
                 )
                 selected = cached_selected
+            elif len(signature_selected) > 1:
+                self._debug(
+                    debug_enabled,
+                    "Using last sync signature selection: "
+                    f"count={len(signature_selected)} names={[s.name for s in signature_selected[:10]]}",
+                )
+                selected = signature_selected
+            elif len(panel_selected) > 1:
+                self._debug(
+                    debug_enabled,
+                    "Using panel list selection cache: "
+                    f"count={len(panel_selected)} names={[s.name for s in panel_selected[:10]]}",
+                )
+                selected = panel_selected
 
         self._debug(
-            f"Selected text strips: count={len(selected)} names={[s.name for s in selected[:10]]}"
+            debug_enabled,
+            f"Selected text strips: count={len(selected)} names={[s.name for s in selected[:10]]}",
         )
 
-        self._debug(f"Resolved source strip: {active_strip.name}")
+        self._debug(debug_enabled, f"Resolved source strip: {active_strip.name}")
 
         targets = [
             strip
@@ -816,59 +876,104 @@ class SUBTITLE_OT_copy_style_from_active(Operator):
         ]
 
         if not targets:
-            self._debug("No selected targets after excluding source strip")
-            self.report({"WARNING"}, "Select other text strips to receive the style")
-            return {"CANCELLED"}
+            self._debug(
+                debug_enabled, "No selected targets after excluding source strip"
+            )
+
+            props = getattr(scene, "subtitle_editor", None)
+            subtitle_channel = getattr(props, "subtitle_channel", None)
+            scope_sequences = sequence_utils._get_sequence_collection(scene) or []
+            fallback_targets = [
+                strip
+                for strip in scope_sequences
+                if getattr(strip, "type", "") == "TEXT"
+                and strip != active_strip
+                and (
+                    subtitle_channel is None
+                    or int(getattr(strip, "channel", -1)) == int(subtitle_channel)
+                )
+            ]
+
+            if fallback_targets:
+                targets = fallback_targets
+                self._debug(
+                    debug_enabled,
+                    "Using current-scope subtitle-channel fallback targets: "
+                    f"count={len(targets)} names={[t.name for t in targets[:10]]}",
+                )
+            else:
+                self.report(
+                    {"WARNING"},
+                    "No eligible text targets in current scope subtitle channel",
+                )
+                return {"CANCELLED"}
 
         self._debug(
-            f"Target strips: count={len(targets)} names={[t.name for t in targets[:10]]}"
+            debug_enabled,
+            f"Target strips: count={len(targets)} names={[t.name for t in targets[:10]]}",
         )
+
+        source_style_map = {}
+        for attr in self._STYLE_ATTRS:
+            has_source, source_value = self._read_style_value(active_strip, attr)
+            if has_source:
+                source_style_map[attr] = source_value
+
+        if not source_style_map:
+            self.report({"WARNING"}, "Active strip has no copyable style properties")
+            return {"CANCELLED"}
 
         copied = 0
         total_attr_success = 0
         for strip in targets:
             attr_success = 0
             attr_failures = []
-            for attr in self._STYLE_ATTRS:
-                has_source, source_value = self._read_style_value(active_strip, attr)
-                if not has_source:
-                    attr_failures.append(f"{attr}:missing_source")
-                    continue
 
+            for attr, source_value in source_style_map.items():
                 has_target, _ = self._read_style_value(strip, attr)
                 if not has_target:
-                    attr_failures.append(f"{attr}:missing_target")
+                    if debug_enabled:
+                        attr_failures.append(f"{attr}:missing_target")
                     continue
 
-                source_norm = self._normalize_value(source_value)
                 try:
                     did_write = self._write_style_value(strip, attr, source_value)
                     if not did_write:
-                        attr_failures.append(f"{attr}:unsupported")
+                        if debug_enabled:
+                            attr_failures.append(f"{attr}:unsupported")
                         continue
 
-                    _, target_value = self._read_style_value(strip, attr)
-                    target_norm = self._normalize_value(target_value)
-                    if target_norm == source_norm:
+                    if debug_enabled:
+                        source_norm = self._normalize_value(source_value)
+                        _, target_value = self._read_style_value(strip, attr)
+                        target_norm = self._normalize_value(target_value)
+                        if target_norm == source_norm:
+                            attr_success += 1
+                            total_attr_success += 1
+                        else:
+                            attr_failures.append(f"{attr}:mismatch")
+                    else:
                         attr_success += 1
                         total_attr_success += 1
-                    else:
-                        attr_failures.append(f"{attr}:mismatch")
                 except (AttributeError, TypeError, ValueError) as exc:
-                    attr_failures.append(f"{attr}:{type(exc).__name__}")
+                    if debug_enabled:
+                        attr_failures.append(f"{attr}:{type(exc).__name__}")
 
             if attr_success > 0:
                 copied += 1
 
-            self._debug(
-                f"Target={strip.name} applied={attr_success}/{len(self._STYLE_ATTRS)} "
-                f"failures={attr_failures[:6]}"
-            )
+            if debug_enabled:
+                self._debug(
+                    debug_enabled,
+                    f"Target={strip.name} applied={attr_success}/{len(source_style_map)} "
+                    f"failures={attr_failures[:6]}",
+                )
 
         sequence_utils.refresh_list(context)
         self._debug(
+            debug_enabled,
             f"Copy complete: strips_with_changes={copied}, targets={len(targets)}, "
-            f"total_attr_success={total_attr_success}"
+            f"total_attr_success={total_attr_success}",
         )
         self.report(
             {"INFO"},
