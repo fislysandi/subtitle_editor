@@ -636,6 +636,31 @@ class SubtitleEditorProperties(PropertyGroup):
         update=lambda self, context: self._apply_live_style(context),
     )
 
+    use_text_color: BoolProperty(
+        name="Use Text Color",
+        description="Apply text color to the active text strip",
+        default=True,
+        update=lambda self, context: self._apply_live_style(context),
+    )
+
+    outline_color: bpy.props.FloatVectorProperty(
+        name="Outline Color",
+        description="Default outline color",
+        subtype="COLOR",
+        size=3,
+        min=0.0,
+        max=1.0,
+        default=(0.0, 0.0, 0.0),
+        update=lambda self, context: self._apply_live_style(context),
+    )
+
+    use_outline_color: BoolProperty(
+        name="Use Outline",
+        description="Toggle outline color on the active text strip",
+        default=True,
+        update=lambda self, context: self._apply_live_style(context),
+    )
+
     shadow_color: bpy.props.FloatVectorProperty(
         name="Shadow Color",
         description="Default shadow color",
@@ -876,13 +901,16 @@ class SubtitleEditorProperties(PropertyGroup):
                 pass
 
             try:
-                strip.use_shadow = True
-                strip.shadow_color = (
-                    self.shadow_color[0],
-                    self.shadow_color[1],
-                    self.shadow_color[2],
-                    1.0,
-                )
+                if self.use_outline_color:
+                    strip.use_outline = True
+                    strip.outline_color = (
+                        self.outline_color[0],
+                        self.outline_color[1],
+                        self.outline_color[2],
+                        1.0,
+                    )
+                else:
+                    strip.use_outline = False
             except AttributeError:
                 pass
 

@@ -99,8 +99,13 @@ def draw_edit_section(layout, context):
 
         box.prop(props, "font_size")
         row = box.row(align=True)
-        row.prop(props, "text_color")
-        row.prop(props, "shadow_color")
+        row.prop(props, "text_color", text="Text Color")
+
+        outline_col = row.row(align=True)
+        outline_col.prop(props, "use_outline_color", text="", toggle=True)
+        outline_picker = outline_col.row(align=True)
+        outline_picker.prop(props, "outline_color", text="Outline Color")
+        outline_picker.enabled = props.use_outline_color
         row = box.row(align=True)
         row.prop(props, "v_align")
         row.prop(props, "wrap_width")

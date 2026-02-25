@@ -83,7 +83,7 @@ def _get_preset_data(props, preset_id: str):
             "name": props.preset_1_name,
             "font_size": props.preset_1_font_size,
             "text_color": props.preset_1_text_color,
-            "shadow_color": props.preset_1_shadow_color,
+            "outline_color": props.preset_1_shadow_color,
             "v_align": props.preset_1_v_align,
             "wrap_width": props.preset_1_wrap_width,
         }
@@ -92,7 +92,7 @@ def _get_preset_data(props, preset_id: str):
             "name": props.preset_2_name,
             "font_size": props.preset_2_font_size,
             "text_color": props.preset_2_text_color,
-            "shadow_color": props.preset_2_shadow_color,
+            "outline_color": props.preset_2_shadow_color,
             "v_align": props.preset_2_v_align,
             "wrap_width": props.preset_2_wrap_width,
         }
@@ -100,7 +100,7 @@ def _get_preset_data(props, preset_id: str):
         "name": props.preset_3_name,
         "font_size": props.preset_3_font_size,
         "text_color": props.preset_3_text_color,
-        "shadow_color": props.preset_3_shadow_color,
+        "outline_color": props.preset_3_shadow_color,
         "v_align": props.preset_3_v_align,
         "wrap_width": props.preset_3_wrap_width,
     }
@@ -110,20 +110,20 @@ def _set_preset_data(props, preset_id: str):
     if preset_id == "PRESET_1":
         props.preset_1_font_size = props.font_size
         props.preset_1_text_color = props.text_color
-        props.preset_1_shadow_color = props.shadow_color
+        props.preset_1_shadow_color = props.outline_color
         props.preset_1_v_align = props.v_align
         props.preset_1_wrap_width = props.wrap_width
         return
     if preset_id == "PRESET_2":
         props.preset_2_font_size = props.font_size
         props.preset_2_text_color = props.text_color
-        props.preset_2_shadow_color = props.shadow_color
+        props.preset_2_shadow_color = props.outline_color
         props.preset_2_v_align = props.v_align
         props.preset_2_wrap_width = props.wrap_width
         return
     props.preset_3_font_size = props.font_size
     props.preset_3_text_color = props.text_color
-    props.preset_3_shadow_color = props.shadow_color
+    props.preset_3_shadow_color = props.outline_color
     props.preset_3_v_align = props.v_align
     props.preset_3_wrap_width = props.wrap_width
 
@@ -258,13 +258,16 @@ class SUBTITLE_OT_add_strip_at_cursor(Operator):
             pass
 
         try:
-            strip.use_shadow = True
-            strip.shadow_color = (
-                props.shadow_color[0],
-                props.shadow_color[1],
-                props.shadow_color[2],
-                1.0,
-            )
+            if props.use_outline_color:
+                strip.use_outline = True
+                strip.outline_color = (
+                    props.outline_color[0],
+                    props.outline_color[1],
+                    props.outline_color[2],
+                    1.0,
+                )
+            else:
+                strip.use_outline = False
         except AttributeError:
             pass
 
@@ -532,7 +535,7 @@ class SUBTITLE_OT_apply_style_preset(Operator):
 
         props.font_size = preset["font_size"]
         props.text_color = preset["text_color"]
-        props.shadow_color = preset["shadow_color"]
+        props.outline_color = preset["outline_color"]
         props.v_align = preset["v_align"]
         props.wrap_width = preset["wrap_width"]
 
@@ -566,7 +569,7 @@ class SUBTITLE_OT_apply_style(Operator):
 
     bl_idname = "subtitle.apply_style"
     bl_label = "Apply Style to Selected"
-    bl_description = "Apply current font size, color, and shadow settings to all selected subtitle strips"
+    bl_description = "Apply current font size, text color, and outline settings to selected subtitle strips"
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
@@ -594,27 +597,13 @@ class SUBTITLE_OT_apply_style(Operator):
                 # Apply style
                 strip.font_size = props.font_size
                 strip.color = props.text_color + (1.0,)  # RGB + Alpha
-                # Shadow isn't a direct property on TextSequence in simple API,
-                # but let's check if we can set it.
-                # Blender VSE Text strips use 'use_shadow' and 'shadow_color' if available?
-                # Actually standard VSE Text Strip has:
-                # - font_size
-                # - color
-                # - use_shadow (bool)
-                # - shadow_color (rgba)
 
-                # Let's check what properties are available on standard text strip using dir() if needed,
-                # but standard API usually supports these.
-
-                # For safety let's use try/except block for properties that might vary by version
                 try:
                     strip.font_size = props.font_size
                 except AttributeError:
                     pass
 
                 try:
-                    # props.text_color is FloatVector(size=3)
-                    # strip.color is FloatVector(size=4) usually
                     strip.color = (
                         props.text_color[0],
                         props.text_color[1],
@@ -625,13 +614,16 @@ class SUBTITLE_OT_apply_style(Operator):
                     pass
 
                 try:
-                    strip.use_shadow = True
-                    strip.shadow_color = (
-                        props.shadow_color[0],
-                        props.shadow_color[1],
-                        props.shadow_color[2],
-                        1.0,
-                    )
+                    if props.use_outline_color:
+                        strip.use_outline = True
+                        strip.outline_color = (
+                            props.outline_color[0],
+                            props.outline_color[1],
+                            props.outline_color[2],
+                            1.0,
+                        )
+                    else:
+                        strip.use_outline = False
                 except AttributeError:
                     pass
 

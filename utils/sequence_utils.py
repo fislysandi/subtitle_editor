@@ -724,12 +724,15 @@ def _sync_edit_state_from_scene(scene) -> None:
                     float(strip.color[1]),
                     float(strip.color[2]),
                 )
-            if hasattr(strip, "shadow_color"):
-                props["shadow_color"] = (
-                    float(strip.shadow_color[0]),
-                    float(strip.shadow_color[1]),
-                    float(strip.shadow_color[2]),
+                props["use_text_color"] = True
+            if hasattr(strip, "outline_color"):
+                props["outline_color"] = (
+                    float(strip.outline_color[0]),
+                    float(strip.outline_color[1]),
+                    float(strip.outline_color[2]),
                 )
+            if hasattr(strip, "use_outline"):
+                props["use_outline_color"] = bool(strip.use_outline)
             if hasattr(strip, "align_y"):
                 align_value = str(strip.align_y)
                 if props.get("v_align", "") != "CUSTOM":
