@@ -10,7 +10,7 @@ class TestSubtitleIO(unittest.TestCase):
 
     def test_srt_parsing(self):
         """Test SRT file parsing"""
-        from ..core.subtitle_io import SubtitleIO, SubtitleEntry
+        from core.subtitle_io import SubtitleIO, SubtitleEntry
 
         # This is a mock test - in real tests you'd use actual files
         entry = SubtitleEntry(index=1, start=0.0, end=5.0, text="Hello World")
@@ -25,7 +25,7 @@ class TestTranscription(unittest.TestCase):
 
     def test_segment_creation(self):
         """Test transcription segment creation"""
-        from ..core.transcriber import TranscriptionSegment
+        from core.transcriber import TranscriptionSegment
 
         seg = TranscriptionSegment(start=0.0, end=3.5, text="Test subtitle")
 
