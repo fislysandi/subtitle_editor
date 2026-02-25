@@ -446,7 +446,13 @@ class _BaseTranscribeOperator(Operator):
                         {"type": "cancelled", "message": "Transcription cancelled"}
                     )
                 else:
-                    failure_reason = tm.last_error.strip() if tm.last_error else ""
+                    failure_reason = (
+                        tm.last_result.message.strip()
+                        if getattr(tm, "last_result", None)
+                        else ""
+                    )
+                    if not failure_reason:
+                        failure_reason = tm.last_error.strip() if tm.last_error else ""
                     if not failure_reason:
                         failure_reason = (
                             f"Model '{config['model']}' not ready. "

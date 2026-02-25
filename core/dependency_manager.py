@@ -95,7 +95,6 @@ class DependencyManager:
         if uv_path:
             return uv_path
 
-        print("[Subtitle Studio] Bootstrapping uv...")
         try:
             # Install uv using standard pip
             DependencyManager.run_install_command(
@@ -107,15 +106,13 @@ class DependencyManager:
         except subprocess.CalledProcessError:
             try:
                 # Fallback to --user
-                print("[Subtitle Studio] Standard install failed, trying --user...")
                 DependencyManager.run_install_command(
                     [sys.executable, "-m", "pip", "install", "--user", "uv"],
                     check=True,
                     capture_output=False,
                 )
                 return DependencyManager.get_uv_path()
-            except subprocess.CalledProcessError as e:
-                print(f"[Subtitle Studio] Failed to bootstrap uv: {e}")
+            except subprocess.CalledProcessError:
                 return None
 
     @staticmethod
@@ -124,32 +121,13 @@ class DependencyManager:
         Get command to install packages using uv (preferred) or pip (fallback).
         Returns list of strings [executable, args...]
         """
-        uv_path = DependencyManager.ensure_uv() if use_uv else None
-        cmd = []
-
-        if uv_path:
-            print(f"[Subtitle Studio] Using uv: {uv_path}")
-            # uv pip install --python <python_path> <packages>
-            cmd = [uv_path, "pip", "install", "--python", sys.executable]
-        else:
-            if not use_uv:
-                print("[Subtitle Studio] UV disabled by user settings, using pip")
-            else:
-                print("[Subtitle Studio] uv not found, falling back to pip")
-            cmd = [sys.executable, "-m", "pip", "install"]
-
-        # Add constraint first if provided
-        if constraint:
-            cmd.append(constraint)
-
-        # Add packages
-        cmd.extend(packages)
-
-        # Add extra args (e.g. index-url)
-        if extra_args:
-            cmd.extend(extra_args)
-
-        return cmd
+        result = resolve_install_command(
+            packages,
+            constraint=constraint,
+            extra_args=extra_args,
+            use_uv=use_uv,
+        )
+        return result.command
 
 
 @dataclass(frozen=True)
@@ -161,10 +139,53 @@ class InstallStep:
 
 
 @dataclass(frozen=True)
+class InstallCommandResult:
+    """Resolved installer command and metadata."""
+
+    command: List[str]
+    installer: str
+    message: str
+
+
+@dataclass(frozen=True)
 class InstallPlan:
     """Immutable install plan for dependency execution."""
 
     steps: List[InstallStep]
+
+
+def resolve_install_command(
+    packages: List[str],
+    *,
+    constraint: Optional[str] = None,
+    extra_args: Optional[List[str]] = None,
+    use_uv: bool = True,
+) -> InstallCommandResult:
+    """Resolve installer command with structured metadata."""
+    uv_path = DependencyManager.ensure_uv() if use_uv else None
+
+    if uv_path:
+        command = [uv_path, "pip", "install", "--python", sys.executable]
+        installer = "uv"
+        message = f"Using uv installer: {uv_path}"
+    else:
+        command = [sys.executable, "-m", "pip", "install"]
+        installer = "pip"
+        message = (
+            "UV disabled by settings; using pip"
+            if not use_uv
+            else "uv unavailable; using pip fallback"
+        )
+
+    if constraint:
+        command.append(constraint)
+
+    command.extend(packages)
+
+    if extra_args:
+        command.extend(extra_args)
+
+    return InstallCommandResult(command=command, installer=installer, message=message)
 
 
 def build_install_step(
@@ -176,13 +197,13 @@ def build_install_step(
     extra_args: Optional[List[str]] = None,
 ) -> InstallStep:
     """Build an immutable install step from package inputs."""
-    command = DependencyManager.get_install_command(
+    command_result = resolve_install_command(
         packages,
         constraint=constraint,
         extra_args=extra_args,
         use_uv=use_uv,
     )
-    return InstallStep(name=name, command=command)
+    return InstallStep(name=name, command=command_result.command)
 
 
 def build_install_plan(steps: List[InstallStep]) -> InstallPlan:

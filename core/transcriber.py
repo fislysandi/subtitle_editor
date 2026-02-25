@@ -56,6 +56,16 @@ class TranscriptionSegment:
     words: Optional[List[Dict]] = None  # Word-level timestamps if enabled
 
 
+@dataclass(frozen=True)
+class OperationResult:
+    """Typed operation result envelope for non-Blender core flows."""
+
+    ok: bool
+    code: str
+    message: str
+    detail: str = ""
+
+
 class TranscriptionManager:
     """Manages transcription using Faster Whisper"""
 
@@ -78,6 +88,16 @@ class TranscriptionManager:
         self.model = None
         self._progress_callback = None
         self.last_error: str = ""
+        self.last_result = OperationResult(ok=True, code="ok", message="Ready")
+
+    def _set_result(self, ok: bool, code: str, message: str, detail: str = "") -> None:
+        self.last_error = message if not ok else ""
+        self.last_result = OperationResult(
+            ok=ok,
+            code=code,
+            message=message,
+            detail=detail,
+        )
 
     def _prepare_cuda_runtime(self) -> None:
         """Best-effort CUDA runtime setup for pip/uv-installed NVIDIA libs."""
@@ -150,6 +170,7 @@ class TranscriptionManager:
             True if model loaded successfully
         """
         self.last_error = ""
+        self.last_result = OperationResult(ok=True, code="ok", message="Loading model")
         try:
             from faster_whisper import WhisperModel
 
@@ -194,19 +215,19 @@ class TranscriptionManager:
                         )
                     elif os.path.exists(local_model_path):
                         # Directory exists but files incomplete
-                        print(f"Error: Model '{self.model_name}' files are incomplete.")
-                        print(
-                            f"Expected: model.bin and config.json in {local_model_path}"
-                        )
-                        print(
-                            f"Please re-download the model using the 'Download Model' button."
+                        self._set_result(
+                            False,
+                            "model_files_incomplete",
+                            f"Model '{self.model_name}' files are incomplete. Re-download the model.",
+                            f"Expected model.bin and config.json in {local_model_path}",
                         )
                         return False
                 else:
                     # Model directory doesn't exist at all
-                    print(f"Error: Model '{self.model_name}' not found.")
-                    print(
-                        f"Please download the model first using the 'Download Model' button in the addon panel."
+                    self._set_result(
+                        False,
+                        "model_not_found",
+                        f"Model '{self.model_name}' not found. Download it from the addon panel first.",
                     )
                     return False
 
@@ -218,9 +239,6 @@ class TranscriptionManager:
             elif compute_type == "float16":
                 # float16 only works efficiently on GPU
                 if self.device == "cpu":
-                    print(
-                        f"Warning: float16 not supported on CPU, falling back to int8"
-                    )
                     compute_type = "int8"
             # int8, float32 work on both CPU and GPU
 
@@ -233,44 +251,40 @@ class TranscriptionManager:
 
             # Update the stored compute type to reflect what was actually used
             self.compute_type = compute_type
+            self._set_result(True, "ok", "Model loaded")
             return True
 
         except Exception as e:
             error_msg = str(e)
-            self.last_error = error_msg
 
             # Provide user-friendly error messages
             if "float16" in error_msg and "not support" in error_msg:
-                self.last_error = (
-                    f"float16 compute type not supported on {self.device}. "
-                    "Use int8 or float32."
-                )
-                print(f"Error: float16 compute type not supported on {self.device}")
-                print(
-                    f"Recommendation: Use 'int8' for CPU or 'float32' for broader compatibility"
+                self._set_result(
+                    False,
+                    "compute_type_unsupported",
+                    f"float16 compute type not supported on {self.device}. Use int8 or float32.",
+                    error_msg,
                 )
             elif "libcublas.so.12" in error_msg or "cannot be loaded" in error_msg:
-                self.last_error = (
+                self._set_result(
+                    False,
+                    "cuda_runtime_missing",
                     "CUDA runtime library missing/unloadable (libcublas.so.12). "
-                    "Reinstall PyTorch from addon, ensure CUDA runtime deps are installed, "
-                    "then restart Blender. If it persists, launch Blender from a shell with "
-                    "LD_LIBRARY_PATH including site-packages/nvidia/*/lib."
-                )
-                print(
-                    "Error: CUDA runtime library missing/unloadable (libcublas.so.12)"
-                )
-                print(
-                    "Recommendation: Reinstall PyTorch and CUDA runtime deps from addon, then restart Blender."
+                    "Reinstall PyTorch + CUDA runtime deps, then restart Blender.",
+                    error_msg,
                 )
             elif (
                 "No such file or directory" in error_msg
                 or "does not appear to have a file named" in error_msg
             ):
-                self.last_error = f"Model '{self.model_name}' files are missing. Download/re-download the model."
-                print(f"Error: Model '{self.model_name}' not found.")
-                print(f"Please download the model using the 'Download Model' button.")
+                self._set_result(
+                    False,
+                    "model_files_missing",
+                    f"Model '{self.model_name}' files are missing. Download/re-download the model.",
+                    error_msg,
+                )
             else:
-                print(f"Error loading model: {e}")
+                self._set_result(False, "model_load_failed", error_msg, error_msg)
 
             return False
 

@@ -350,7 +350,7 @@ class SUBTITLE_OT_install_pytorch(Operator):
                 ]
             )
 
-            print(f"Running command: {' '.join(plan.steps[0].command)}")
+            logger.info("Running install step: %s", plan.steps[0].name)
             _schedule_scene_update(
                 scene_name,
                 lambda props: setattr(
@@ -443,7 +443,7 @@ class SUBTITLE_OT_install_pytorch(Operator):
                     ]
                 )
 
-                print(f"Running command: {' '.join(runtime_plan.steps[0].command)}")
+                logger.info("Running install step: %s", runtime_plan.steps[0].name)
                 runtime_boundary = execute_with_boundary(
                     "subtitle.pytorch.cuda_runtime",
                     lambda: execute_install_plan(runtime_plan),
