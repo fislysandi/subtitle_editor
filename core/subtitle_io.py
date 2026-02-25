@@ -10,6 +10,11 @@ from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 
+try:
+    from ..hardening.validation import validate_subtitle_payload
+except ImportError:
+    from hardening.validation import validate_subtitle_payload
+
 
 @dataclass
 class SubtitleEntry:
@@ -207,33 +212,18 @@ class SubtitleIO:
             with open(filepath, "r", encoding="utf-8", errors="replace") as f:
                 content = f.read()
 
-        # Split by double newline (subtitle blocks)
-        blocks = content.strip().split("\n\n")
+        validated = validate_subtitle_payload(content, ".srt")
 
-        for block in blocks:
-            lines = block.strip().split("\n")
-            if len(lines) < 3:
-                continue
-
-            # First line is index
+        for lines in validated.accepted_blocks:
             try:
-                index = int(lines[0].strip())
-            except ValueError:
+                index = int(lines[0])
+                start_str, end_str = lines[1].split("-->", 1)
+                start = cls._parse_timecode(start_str.strip())
+                end = cls._parse_timecode(end_str.strip().split()[0])
+                text = "\n".join(lines[2:]).strip()
+                entries.append(SubtitleEntry(index, start, end, text))
+            except (ValueError, IndexError):
                 continue
-
-            # Second line is timecode
-            time_line = lines[1].strip()
-            if "-->" not in time_line:
-                continue
-
-            start_str, end_str = time_line.split("-->")
-            start = cls._parse_timecode(start_str.strip())
-            end = cls._parse_timecode(end_str.strip())
-
-            # Remaining lines are text
-            text = "\n".join(lines[2:]).strip()
-
-            entries.append(SubtitleEntry(index, start, end, text))
 
         return entries
 
@@ -279,40 +269,22 @@ class SubtitleIO:
             with open(filepath, "r", encoding="utf-8", errors="replace") as f:
                 lines = f.readlines()
 
-        # Skip header
-        i = 0
-        while i < len(lines) and not lines[i].strip().startswith("00:"):
-            i += 1
+        content = "".join(lines)
+        validated = validate_subtitle_payload(content, ".vtt")
 
         index = 1
-        while i < len(lines):
-            line = lines[i].strip()
-
-            # Skip empty lines
-            if not line:
-                i += 1
-                continue
-
-            # Check for timecode line
-            if "-->" in line:
-                start_str, end_str = line.split("-->")
-                start = cls._parse_timecode(start_str.strip())
-                end = cls._parse_timecode(
-                    end_str.strip().split()[0]
-                )  # Remove positioning
-
-                # Collect text lines
-                text_lines = []
-                i += 1
-                while i < len(lines) and lines[i].strip():
-                    text_lines.append(lines[i].strip())
-                    i += 1
-
+        for cue_lines in validated.accepted_blocks:
+            try:
+                time_line_index = 0 if "-->" in cue_lines[0] else 1
+                start_str, end_str = cue_lines[time_line_index].split("-->", 1)
+                start = cls._parse_timecode(start_str.strip().split()[0])
+                end = cls._parse_timecode(end_str.strip().split()[0])
+                text_lines = cue_lines[time_line_index + 1 :]
                 text = "\n".join(text_lines)
                 entries.append(SubtitleEntry(index, start, end, text))
                 index += 1
-            else:
-                i += 1
+            except (ValueError, IndexError):
+                continue
 
         return entries
 

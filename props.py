@@ -15,6 +15,7 @@ from bpy.types import PropertyGroup
 
 # Import language items directly
 from .constants import LANGUAGE_ITEMS
+from .core.style_plan import build_style_patch_from_props
 from .utils import file_utils, sequence_utils
 
 
@@ -636,6 +637,31 @@ class SubtitleEditorProperties(PropertyGroup):
         update=lambda self, context: self._apply_live_style(context),
     )
 
+    use_text_color: BoolProperty(
+        name="Use Text Color",
+        description="Apply text color to the active text strip",
+        default=True,
+        update=lambda self, context: self._apply_live_style(context),
+    )
+
+    outline_color: bpy.props.FloatVectorProperty(
+        name="Outline Color",
+        description="Default outline color",
+        subtype="COLOR",
+        size=3,
+        min=0.0,
+        max=1.0,
+        default=(0.0, 0.0, 0.0),
+        update=lambda self, context: self._apply_live_style(context),
+    )
+
+    use_outline_color: BoolProperty(
+        name="Use Outline",
+        description="Toggle outline color on the active text strip",
+        default=True,
+        update=lambda self, context: self._apply_live_style(context),
+    )
+
     shadow_color: bpy.props.FloatVectorProperty(
         name="Shadow Color",
         description="Default shadow color",
@@ -858,37 +884,32 @@ class SubtitleEditorProperties(PropertyGroup):
         if not strip:
             return
 
+        style_patch = build_style_patch_from_props(self)
+
         self._updating_style = True
         try:
             try:
-                strip.font_size = self.font_size
+                strip.font_size = style_patch.font_size
             except AttributeError:
                 pass
 
             try:
-                strip.color = (
-                    self.text_color[0],
-                    self.text_color[1],
-                    self.text_color[2],
-                    1.0,
-                )
+                strip.color = style_patch.text_color_rgba
             except AttributeError:
                 pass
 
             try:
-                strip.use_shadow = True
-                strip.shadow_color = (
-                    self.shadow_color[0],
-                    self.shadow_color[1],
-                    self.shadow_color[2],
-                    1.0,
-                )
+                if style_patch.use_outline:
+                    strip.use_outline = True
+                    strip.outline_color = style_patch.outline_color_rgba
+                else:
+                    strip.use_outline = False
             except AttributeError:
                 pass
 
-            if self.v_align != "CUSTOM":
+            if style_patch.v_align != "CUSTOM":
                 try:
-                    strip.align_y = self.v_align
+                    strip.align_y = style_patch.v_align
                 except AttributeError:
                     pass
             else:
@@ -898,7 +919,7 @@ class SubtitleEditorProperties(PropertyGroup):
                     pass
 
             try:
-                strip.wrap_width = self.wrap_width
+                strip.wrap_width = style_patch.wrap_width
             except AttributeError:
                 pass
         finally:

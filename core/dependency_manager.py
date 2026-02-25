@@ -5,6 +5,8 @@ import shutil
 import platform
 import urllib.request
 from pathlib import Path
+from dataclasses import dataclass
+from typing import Callable, List, Optional
 
 
 class DependencyManager:
@@ -93,7 +95,6 @@ class DependencyManager:
         if uv_path:
             return uv_path
 
-        print("[Subtitle Studio] Bootstrapping uv...")
         try:
             # Install uv using standard pip
             DependencyManager.run_install_command(
@@ -105,15 +106,13 @@ class DependencyManager:
         except subprocess.CalledProcessError:
             try:
                 # Fallback to --user
-                print("[Subtitle Studio] Standard install failed, trying --user...")
                 DependencyManager.run_install_command(
                     [sys.executable, "-m", "pip", "install", "--user", "uv"],
                     check=True,
                     capture_output=False,
                 )
                 return DependencyManager.get_uv_path()
-            except subprocess.CalledProcessError as e:
-                print(f"[Subtitle Studio] Failed to bootstrap uv: {e}")
+            except subprocess.CalledProcessError:
                 return None
 
     @staticmethod
@@ -122,29 +121,118 @@ class DependencyManager:
         Get command to install packages using uv (preferred) or pip (fallback).
         Returns list of strings [executable, args...]
         """
-        uv_path = DependencyManager.ensure_uv() if use_uv else None
-        cmd = []
+        result = resolve_install_command(
+            packages,
+            constraint=constraint,
+            extra_args=extra_args,
+            use_uv=use_uv,
+        )
+        return result.command
 
-        if uv_path:
-            print(f"[Subtitle Studio] Using uv: {uv_path}")
-            # uv pip install --python <python_path> <packages>
-            cmd = [uv_path, "pip", "install", "--python", sys.executable]
-        else:
-            if not use_uv:
-                print("[Subtitle Studio] UV disabled by user settings, using pip")
-            else:
-                print("[Subtitle Studio] uv not found, falling back to pip")
-            cmd = [sys.executable, "-m", "pip", "install"]
 
-        # Add constraint first if provided
-        if constraint:
-            cmd.append(constraint)
+@dataclass(frozen=True)
+class InstallStep:
+    """Single dependency installation command step."""
 
-        # Add packages
-        cmd.extend(packages)
+    name: str
+    command: List[str]
 
-        # Add extra args (e.g. index-url)
-        if extra_args:
-            cmd.extend(extra_args)
 
-        return cmd
+@dataclass(frozen=True)
+class InstallCommandResult:
+    """Resolved installer command and metadata."""
+
+    command: List[str]
+    installer: str
+    message: str
+
+
+@dataclass(frozen=True)
+class InstallPlan:
+    """Immutable install plan for dependency execution."""
+
+    steps: List[InstallStep]
+
+
+def resolve_install_command(
+    packages: List[str],
+    *,
+    constraint: Optional[str] = None,
+    extra_args: Optional[List[str]] = None,
+    use_uv: bool = True,
+) -> InstallCommandResult:
+    """Resolve installer command with structured metadata."""
+    uv_path = DependencyManager.ensure_uv() if use_uv else None
+
+    if uv_path:
+        command = [uv_path, "pip", "install", "--python", sys.executable]
+        installer = "uv"
+        message = f"Using uv installer: {uv_path}"
+    else:
+        command = [sys.executable, "-m", "pip", "install"]
+        installer = "pip"
+        message = (
+            "UV disabled by settings; using pip"
+            if not use_uv
+            else "uv unavailable; using pip fallback"
+        )
+
+    if constraint:
+        command.append(constraint)
+
+    command.extend(packages)
+
+    if extra_args:
+        command.extend(extra_args)
+
+    return InstallCommandResult(command=command, installer=installer, message=message)
+
+
+def build_install_step(
+    name: str,
+    packages: List[str],
+    *,
+    use_uv: bool,
+    constraint: Optional[str] = None,
+    extra_args: Optional[List[str]] = None,
+) -> InstallStep:
+    """Build an immutable install step from package inputs."""
+    command_result = resolve_install_command(
+        packages,
+        constraint=constraint,
+        extra_args=extra_args,
+        use_uv=use_uv,
+    )
+    return InstallStep(name=name, command=command_result.command)
+
+
+def build_install_plan(steps: List[InstallStep]) -> InstallPlan:
+    """Build immutable install plan from ordered steps."""
+    return InstallPlan(steps=list(steps))
+
+
+def execute_install_plan(
+    plan: InstallPlan,
+    *,
+    on_step_start: Optional[Callable[[int, int, InstallStep], None]] = None,
+    is_cancelled: Optional[Callable[[], bool]] = None,
+) -> subprocess.CompletedProcess | None:
+    """Execute an install plan sequentially, respecting cancellation callback."""
+    total_steps = len(plan.steps)
+    for index, step in enumerate(plan.steps, start=1):
+        if is_cancelled and is_cancelled():
+            return None
+
+        if on_step_start:
+            on_step_start(index, total_steps, step)
+
+        result = DependencyManager.run_install_command(
+            step.command,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            return result
+
+    return subprocess.CompletedProcess(args=[], returncode=0)

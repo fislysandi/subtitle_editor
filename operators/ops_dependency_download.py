@@ -8,10 +8,20 @@ Uses modal operator pattern with background threading.
 import bpy
 import threading
 import queue
+import logging
 from typing import Optional, Dict, Any
 from bpy.types import Operator
-from ..core.dependency_manager import DependencyManager
+from ..core.dependency_manager import (
+    DependencyManager,
+    build_install_plan,
+    build_install_step,
+    execute_install_plan,
+)
 from ..config import __addon_name__
+from ..hardening.error_boundary import execute_with_boundary
+
+
+logger = logging.getLogger(__name__)
 
 
 class DependencyDownloadState:
@@ -245,39 +255,52 @@ class SUBTITLE_OT_download_dependencies(Operator):
         Only uses the shared state object to report progress.
         """
         try:
-            total_packages = len(packages)
-
-            for i, package in enumerate(packages):
-                if state.is_cancelled():
-                    state.mark_complete(success=False)
-                    return
-
-                # Update progress before starting this package
-                progress = i / total_packages
-                state.update(progress=progress, status=f"Installing {package}...")
-
-                # Run uv install for this package
-                try:
-                    cmd = DependencyManager.get_install_command(
-                        [package], constraint="numpy<2.0", use_uv=self._use_uv
+            plan = build_install_plan(
+                [
+                    build_install_step(
+                        name=package,
+                        packages=[package],
+                        constraint="numpy<2.0",
+                        use_uv=self._use_uv,
                     )
-                except Exception as e:
-                    state.mark_complete(success=False, error=str(e))
-                    return
+                    for package in packages
+                ]
+            )
 
-                result = DependencyManager.run_install_command(
-                    cmd, capture_output=True, text=True, check=False
+            def on_step_start(index, total, step):
+                progress = (index - 1) / max(total, 1)
+                state.update(progress=progress, status=f"Installing {step.name}...")
+
+            boundary = execute_with_boundary(
+                "subtitle.dependencies.install_plan",
+                lambda: execute_install_plan(
+                    plan,
+                    on_step_start=on_step_start,
+                    is_cancelled=state.is_cancelled,
+                ),
+                logger,
+                context={"package_count": len(packages), "use_uv": self._use_uv},
+                fallback_message="Dependency installation failed.",
+            )
+
+            if not boundary.ok:
+                state.mark_complete(
+                    success=False, error=boundary.user_message or "Error"
                 )
+                return
 
-                if result.returncode != 0:
-                    error_msg = (
-                        result.stderr[:200] if result.stderr else "Unknown error"
-                    )
-                    state.mark_complete(success=False, error=error_msg)
-                    return
+            result = boundary.value
+            if result is None:
+                state.mark_complete(success=False)
+                return
 
-                # Update progress after completing this package
-                progress = (i + 1) / total_packages
+            if result.returncode != 0:
+                error_msg = result.stderr[:200] if result.stderr else "Unknown error"
+                state.mark_complete(success=False, error=error_msg)
+                return
+
+            for i, package in enumerate(packages, start=1):
+                progress = i / max(len(packages), 1)
                 state.update(progress=progress, status=f"Installed {package}")
 
             # All packages installed successfully
