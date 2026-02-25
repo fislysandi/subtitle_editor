@@ -670,11 +670,71 @@ class SUBTITLE_OT_copy_style_from_active(Operator):
         "use_box",
         "box_color",
         "box_margin",
+        "location",
         "box_line_thickness",
         "wrap_width",
         "align_x",
         "align_y",
     )
+
+    @staticmethod
+    def _debug(message: str) -> None:
+        print(f"[Subtitle Studio][CopyStyle] {message}")
+
+    @staticmethod
+    def _normalize_value(value):
+        if hasattr(value, "name"):
+            return getattr(value, "name")
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            return value
+        try:
+            return tuple(value)
+        except TypeError:
+            return value
+
+    @staticmethod
+    def _read_style_value(strip, attr):
+        if hasattr(strip, attr):
+            return True, getattr(strip, attr)
+
+        if attr == "align_x" and hasattr(strip, "location"):
+            loc = getattr(strip, "location")
+            if len(loc) >= 2:
+                return True, float(loc[0])
+
+        if attr == "align_y" and hasattr(strip, "location"):
+            loc = getattr(strip, "location")
+            if len(loc) >= 2:
+                return True, float(loc[1])
+
+        if attr == "box_line_thickness" and hasattr(strip, "box_margin"):
+            return True, getattr(strip, "box_margin")
+
+        return False, None
+
+    @staticmethod
+    def _write_style_value(strip, attr, value) -> bool:
+        if hasattr(strip, attr):
+            setattr(strip, attr, value)
+            return True
+
+        if attr in {"align_x", "align_y"} and hasattr(strip, "location"):
+            loc = getattr(strip, "location")
+            if len(loc) >= 2:
+                x_val = float(loc[0])
+                y_val = float(loc[1])
+                if attr == "align_x":
+                    x_val = float(value)
+                else:
+                    y_val = float(value)
+                strip.location = (x_val, y_val)
+                return True
+
+        if attr == "box_line_thickness" and hasattr(strip, "box_margin"):
+            setattr(strip, "box_margin", value)
+            return True
+
+        return False
 
     def execute(self, context):
         scene = context.scene
@@ -682,18 +742,18 @@ class SUBTITLE_OT_copy_style_from_active(Operator):
             self.report({"WARNING"}, "Open the Sequencer to copy styles")
             return {"CANCELLED"}
 
-        selected = [
-            strip
-            for strip in getattr(context, "selected_sequences", [])
-            if getattr(strip, "type", "") == "TEXT"
-        ]
-        if not selected:
-            selected = sequence_utils.get_selected_strips(context)
+        self._debug("Button pressed")
+        self._debug(
+            "Context active strip candidates: "
+            f"active_sequence_strip={getattr(getattr(context, 'active_sequence_strip', None), 'name', None)}, "
+            f"active_sequence={getattr(getattr(context, 'active_sequence', None), 'name', None)}, "
+            f"scene.active_strip={getattr(getattr(scene.sequence_editor, 'active_strip', None), 'name', None)}"
+        )
 
         active_candidates = [
+            scene.sequence_editor.active_strip,
             getattr(context, "active_sequence_strip", None),
             getattr(context, "active_sequence", None),
-            scene.sequence_editor.active_strip,
         ]
 
         active_strip = None
@@ -702,12 +762,52 @@ class SUBTITLE_OT_copy_style_from_active(Operator):
                 active_strip = candidate
                 break
 
-        if active_strip is None and selected:
-            active_strip = selected[0]
-
         if not active_strip or getattr(active_strip, "type", "") != "TEXT":
             self.report({"WARNING"}, "Select a text strip to copy from")
             return {"CANCELLED"}
+
+        strips_all = getattr(scene.sequence_editor, "strips_all", None)
+        selected = []
+        if strips_all:
+            selected = [
+                strip
+                for strip in strips_all
+                if getattr(strip, "type", "") == "TEXT"
+                and getattr(strip, "select", False)
+            ]
+        if not selected:
+            selected = [
+                strip
+                for strip in getattr(context, "selected_editable_sequences", [])
+                if getattr(strip, "type", "") == "TEXT"
+            ]
+        if not selected:
+            selected = [
+                strip
+                for strip in getattr(context, "selected_sequences", [])
+                if getattr(strip, "type", "") == "TEXT"
+            ]
+
+        if len(selected) <= 1:
+            cached_selected = sequence_utils.get_cached_multi_selected_text_strips(
+                context
+            )
+            cache_has_active = any(
+                getattr(strip, "name", "") == active_strip.name
+                for strip in cached_selected
+            )
+            if len(cached_selected) > 1 and cache_has_active:
+                self._debug(
+                    "Using cached multi-selection snapshot: "
+                    f"count={len(cached_selected)} names={[s.name for s in cached_selected[:10]]}"
+                )
+                selected = cached_selected
+
+        self._debug(
+            f"Selected text strips: count={len(selected)} names={[s.name for s in selected[:10]]}"
+        )
+
+        self._debug(f"Resolved source strip: {active_strip.name}")
 
         targets = [
             strip
@@ -716,25 +816,64 @@ class SUBTITLE_OT_copy_style_from_active(Operator):
         ]
 
         if not targets:
-            current_text_strips = sequence_utils.get_text_strips(scene)
-            targets = [strip for strip in current_text_strips if strip != active_strip]
-
-        if not targets:
+            self._debug("No selected targets after excluding source strip")
             self.report({"WARNING"}, "Select other text strips to receive the style")
             return {"CANCELLED"}
 
+        self._debug(
+            f"Target strips: count={len(targets)} names={[t.name for t in targets[:10]]}"
+        )
+
         copied = 0
+        total_attr_success = 0
         for strip in targets:
+            attr_success = 0
+            attr_failures = []
             for attr in self._STYLE_ATTRS:
-                if hasattr(active_strip, attr) and hasattr(strip, attr):
-                    try:
-                        setattr(strip, attr, getattr(active_strip, attr))
-                    except (AttributeError, TypeError):
+                has_source, source_value = self._read_style_value(active_strip, attr)
+                if not has_source:
+                    attr_failures.append(f"{attr}:missing_source")
+                    continue
+
+                has_target, _ = self._read_style_value(strip, attr)
+                if not has_target:
+                    attr_failures.append(f"{attr}:missing_target")
+                    continue
+
+                source_norm = self._normalize_value(source_value)
+                try:
+                    did_write = self._write_style_value(strip, attr, source_value)
+                    if not did_write:
+                        attr_failures.append(f"{attr}:unsupported")
                         continue
-            copied += 1
+
+                    _, target_value = self._read_style_value(strip, attr)
+                    target_norm = self._normalize_value(target_value)
+                    if target_norm == source_norm:
+                        attr_success += 1
+                        total_attr_success += 1
+                    else:
+                        attr_failures.append(f"{attr}:mismatch")
+                except (AttributeError, TypeError, ValueError) as exc:
+                    attr_failures.append(f"{attr}:{type(exc).__name__}")
+
+            if attr_success > 0:
+                copied += 1
+
+            self._debug(
+                f"Target={strip.name} applied={attr_success}/{len(self._STYLE_ATTRS)} "
+                f"failures={attr_failures[:6]}"
+            )
 
         sequence_utils.refresh_list(context)
-        self.report({"INFO"}, f"Copied style to {copied} strip(s)")
+        self._debug(
+            f"Copy complete: strips_with_changes={copied}, targets={len(targets)}, "
+            f"total_attr_success={total_attr_success}"
+        )
+        self.report(
+            {"INFO"},
+            f"Copied style to {copied} strip(s) ({total_attr_success} attribute writes)",
+        )
         return {"FINISHED"}
 
 

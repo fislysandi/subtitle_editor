@@ -47,3 +47,47 @@ Consult `docs/whisper-config.md` before tweaking default beam sizes, VAD thresho
 - Reload the add-on via Blender's scripting console between edits if panels refuse to redraw; modal operators rely on `area.tag_redraw()` inside scheduled timers.
 - Restart Blender when UI elements lag or hang, as event handlers are tied to `bpy.app.timers` for long-running downloads/transcriptions.
 - Watch the console/logs for thread-safe updates and avoid touching props from background threads (the pattern is documented in `context/project-intelligence/technical-domain.md`).
+
+## Evaluation Logging Standard
+
+Use a single structured format for all addon evaluation logs written to the Blender system console.
+
+Format:
+
+```text
+[Subtitle Studio][EVAL] action=<action> phase=<phase> outcome=<outcome> reason=<reason> context=<json>
+```
+
+Required fields:
+
+- `action`: logical operation id (example: `transcribe.invoke`, `transcribe.worker`, `deps.check`, `model.load`)
+- `phase`: `start|checkpoint|decision|success|warning|fail|cancel`
+- `outcome`: `ok|warn|error|cancelled|noop`
+- `reason`: short machine-readable reason code (example: `missing_strip`, `low_recall_retry`, `model_not_found`)
+- `context`: sanitized JSON payload with only useful debug data
+
+Required event phases:
+
+- `start`: operation begins
+- `checkpoint`: important intermediate state
+- `decision`: branch selection based on evaluated conditions
+- `success`: operation completed successfully
+- `warning`: non-fatal issue or fallback
+- `fail`: operation failed
+- `cancel`: user or system cancellation
+
+Context sanitization rules:
+
+- Avoid secrets/tokens and private credentials.
+- Avoid dumping full large payloads.
+- Prefer short, stable keys (`scene`, `model`, `device`, `segment_count`, `coverage`).
+- Include enough data to explain why a branch was taken.
+
+Examples:
+
+```text
+[Subtitle Studio][EVAL] action=transcribe.invoke phase=start outcome=ok reason=begin context={"scene":"Scene","strip":"Voice_01","model":"base","device":"auto"}
+[Subtitle Studio][EVAL] action=transcribe.worker phase=decision outcome=warn reason=low_recall_retry context={"audio_duration":92.4,"segments":3,"word_count":14,"coverage":0.018}
+[Subtitle Studio][EVAL] action=model.load phase=fail outcome=error reason=model_not_found context={"model":"large-v3","cache":"configured"}
+[Subtitle Studio][EVAL] action=deps.check phase=success outcome=ok reason=dependency_scan_complete context={"missing":["onnxruntime"],"gpu_detected":false}
+```

@@ -10,6 +10,7 @@ from typing import Optional, List, Any, NamedTuple
 
 
 _selection_signature_by_scene = {}
+_last_multi_selection_by_scene = {}
 
 
 class EditTargetResolution(NamedTuple):
@@ -53,6 +54,41 @@ def _find_text_strip_by_name(scene, strip_name: str) -> Optional[Any]:
     return None
 
 
+def _find_text_strip_by_name_recursive(strips, strip_name: str) -> Optional[Any]:
+    for strip in strips:
+        strip_type = getattr(strip, "type", "")
+        if strip_type == "TEXT" and getattr(strip, "name", "") == strip_name:
+            return strip
+        if strip_type == "META":
+            meta_sequences = getattr(strip, "sequences", None)
+            if meta_sequences:
+                found = _find_text_strip_by_name_recursive(meta_sequences, strip_name)
+                if found:
+                    return found
+    return None
+
+
+def get_cached_multi_selected_text_strips(context) -> List[Any]:
+    scene = getattr(context, "scene", None)
+    if not scene:
+        return []
+
+    cached_names = _last_multi_selection_by_scene.get(scene.name)
+    if not cached_names:
+        return []
+
+    sequences = _get_sequence_collection(scene)
+    if not sequences:
+        return []
+
+    resolved = []
+    for name in cached_names:
+        strip = _find_text_strip_by_name_recursive(sequences, name)
+        if strip is not None:
+            resolved.append(strip)
+    return resolved
+
+
 def _find_list_item_for_strip(scene, strip_name: str):
     items = getattr(scene, "text_strip_items", None)
     if items is None:
@@ -84,6 +120,20 @@ def _set_single_strip_selected(scene, target_strip) -> None:
     sequences = _get_sequence_collection(scene)
     if not sequences:
         return
+
+    seq_editor = getattr(scene, "sequence_editor", None)
+    strips_all = getattr(seq_editor, "strips_all", None)
+    if strips_all:
+        selected_before = tuple(
+            sorted(
+                strip.name
+                for strip in strips_all
+                if getattr(strip, "type", "") == "TEXT"
+                and getattr(strip, "select", False)
+            )
+        )
+        if len(selected_before) > 1:
+            _last_multi_selection_by_scene[scene.name] = selected_before
 
     for strip in sequences:
         strip.select = strip == target_strip
@@ -365,10 +415,25 @@ def on_text_strip_index_update(self, context):
         item = items[index]
         strip = _find_text_strip_by_name(scene, item.name)
 
+        seq_editor = getattr(scene, "sequence_editor", None)
+        strips_all = getattr(seq_editor, "strips_all", None)
+        selected_text_names = ()
+        if strips_all:
+            selected_text_names = tuple(
+                sorted(
+                    s.name
+                    for s in strips_all
+                    if getattr(s, "type", "") == "TEXT" and getattr(s, "select", False)
+                )
+            )
+            if len(selected_text_names) > 1:
+                _last_multi_selection_by_scene[scene.name] = selected_text_names
+
         props._syncing_target = True
         try:
             if strip:
-                _set_single_strip_selected(scene, strip)
+                if len(selected_text_names) <= 1:
+                    _set_single_strip_selected(scene, strip)
                 scene.frame_current = strip.frame_final_start
                 if item.text != strip.text:
                     item.text = strip.text
@@ -514,6 +579,10 @@ def _poll_selection_sync() -> float:
         if signature is None:
             continue
 
+        _, selected_names, _, _, _, _ = signature
+        if len(selected_names) > 1:
+            _last_multi_selection_by_scene[scene.name] = selected_names
+
         previous = _selection_signature_by_scene.get(scene.name)
         if previous == signature:
             continue
@@ -537,6 +606,10 @@ def on_depsgraph_update(scene, depsgraph):
     signature = _selection_signature(scene)
     if signature is None:
         return
+
+    _, selected_names, _, _, _, _ = signature
+    if len(selected_names) > 1:
+        _last_multi_selection_by_scene[scene.name] = selected_names
 
     previous = _selection_signature_by_scene.get(scene.name)
     if previous == signature:
@@ -566,3 +639,4 @@ def unregister_handlers() -> None:
         bpy.app.timers.unregister(_poll_selection_sync)
 
     _selection_signature_by_scene.clear()
+    _last_multi_selection_by_scene.clear()

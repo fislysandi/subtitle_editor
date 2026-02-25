@@ -278,6 +278,7 @@ class TranscriptionManager:
         if self.model is None:
             raise RuntimeError("Model not loaded. Call load_model() first.")
 
+
         # Set up options
         options: Dict[str, Any] = {
             "word_timestamps": word_timestamps,
@@ -321,13 +322,14 @@ class TranscriptionManager:
 
             # Add word timestamps if available
             if word_timestamps and hasattr(segment, "words"):
+                segment_words = segment.words or []
                 seg_data.words = [
                     {
                         "word": word.word,
                         "start": word.start,
                         "end": word.end,
                     }
-                    for word in segment.words
+                    for word in segment_words
                 ]
 
             # Report progress

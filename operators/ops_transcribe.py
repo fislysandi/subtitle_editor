@@ -47,6 +47,7 @@ class _BaseTranscribeOperator(Operator):
         scene = context.scene
         props = scene.subtitle_editor
 
+
         if props.is_transcribing:
             self.report({"WARNING"}, "Transcription already in progress")
             return {"CANCELLED"}
@@ -106,6 +107,7 @@ class _BaseTranscribeOperator(Operator):
         wm = context.window_manager
         self._timer = wm.event_timer_add(0.1, window=context.window)
         wm.modal_handler_add(self)
+
 
         return {"RUNNING_MODAL"}
 
@@ -425,6 +427,7 @@ class _BaseTranscribeOperator(Operator):
 
         try:
             check_cancel()
+
 
             tm = transcriber.TranscriptionManager(
                 model_name=config["model"],
