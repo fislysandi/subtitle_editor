@@ -5,6 +5,8 @@ import shutil
 import platform
 import urllib.request
 from pathlib import Path
+from dataclasses import dataclass
+from typing import Callable, List, Optional
 
 
 class DependencyManager:
@@ -148,3 +150,68 @@ class DependencyManager:
             cmd.extend(extra_args)
 
         return cmd
+
+
+@dataclass(frozen=True)
+class InstallStep:
+    """Single dependency installation command step."""
+
+    name: str
+    command: List[str]
+
+
+@dataclass(frozen=True)
+class InstallPlan:
+    """Immutable install plan for dependency execution."""
+
+    steps: List[InstallStep]
+
+
+def build_install_step(
+    name: str,
+    packages: List[str],
+    *,
+    use_uv: bool,
+    constraint: Optional[str] = None,
+    extra_args: Optional[List[str]] = None,
+) -> InstallStep:
+    """Build an immutable install step from package inputs."""
+    command = DependencyManager.get_install_command(
+        packages,
+        constraint=constraint,
+        extra_args=extra_args,
+        use_uv=use_uv,
+    )
+    return InstallStep(name=name, command=command)
+
+
+def build_install_plan(steps: List[InstallStep]) -> InstallPlan:
+    """Build immutable install plan from ordered steps."""
+    return InstallPlan(steps=list(steps))
+
+
+def execute_install_plan(
+    plan: InstallPlan,
+    *,
+    on_step_start: Optional[Callable[[int, int, InstallStep], None]] = None,
+    is_cancelled: Optional[Callable[[], bool]] = None,
+) -> subprocess.CompletedProcess | None:
+    """Execute an install plan sequentially, respecting cancellation callback."""
+    total_steps = len(plan.steps)
+    for index, step in enumerate(plan.steps, start=1):
+        if is_cancelled and is_cancelled():
+            return None
+
+        if on_step_start:
+            on_step_start(index, total_steps, step)
+
+        result = DependencyManager.run_install_command(
+            step.command,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            return result
+
+    return subprocess.CompletedProcess(args=[], returncode=0)

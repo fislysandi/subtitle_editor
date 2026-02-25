@@ -6,9 +6,19 @@ Handles checking and installing dependencies like faster-whisper, torch, etc.
 
 import bpy
 import sys
+import logging
 from bpy.types import Operator
-from ..core.dependency_manager import DependencyManager
+from ..core.dependency_manager import (
+    DependencyManager,
+    build_install_plan,
+    build_install_step,
+    execute_install_plan,
+)
 from ..config import __addon_name__
+from ..hardening.error_boundary import execute_with_boundary
+
+
+logger = logging.getLogger(__name__)
 
 
 def _schedule_scene_update(scene_name, updater):
@@ -326,21 +336,21 @@ class SUBTITLE_OT_install_pytorch(Operator):
                 ),
             )
 
-            # Prepare extra args for index-url if needed
-            extra_args = []
-            if index_url:
-                extra_args.extend(["--index-url", index_url])
+            extra_args = ["--index-url", index_url] if index_url else []
 
-            # IMPORTANT: numpy<2.0 is required for compatibility with aud module
-            # Use DependencyManager to get uv/pip command
-            cmd = DependencyManager.get_install_command(
-                packages,
-                constraint="numpy<2.0",
-                extra_args=extra_args,
-                use_uv=use_uv,
+            plan = build_install_plan(
+                [
+                    build_install_step(
+                        name=f"pytorch-{pytorch_version}",
+                        packages=packages,
+                        constraint="numpy<2.0",
+                        extra_args=extra_args,
+                        use_uv=use_uv,
+                    )
+                ]
             )
 
-            print(f"Running command: {' '.join(cmd)}")
+            print(f"Running command: {' '.join(plan.steps[0].command)}")
             _schedule_scene_update(
                 scene_name,
                 lambda props: setattr(
@@ -350,8 +360,44 @@ class SUBTITLE_OT_install_pytorch(Operator):
                 ),
             )
 
-            # Run command (output goes to system console)
-            result = DependencyManager.run_install_command(cmd, check=False)
+            boundary = execute_with_boundary(
+                "subtitle.pytorch.install",
+                lambda: execute_install_plan(plan),
+                logger,
+                context={"version": pytorch_version, "use_uv": use_uv},
+                fallback_message="PyTorch installation failed.",
+            )
+
+            if not boundary.ok:
+                _schedule_scene_update(
+                    scene_name,
+                    lambda props: setattr(
+                        props,
+                        "pytorch_install_status",
+                        f"Error: {boundary.user_message}",
+                    ),
+                )
+                _schedule_scene_update(
+                    scene_name,
+                    lambda props: setattr(props, "is_installing_pytorch", False),
+                )
+                return
+
+            result = boundary.value
+            if result is None:
+                _schedule_scene_update(
+                    scene_name,
+                    lambda props: setattr(
+                        props,
+                        "pytorch_install_status",
+                        "Installation cancelled.",
+                    ),
+                )
+                _schedule_scene_update(
+                    scene_name,
+                    lambda props: setattr(props, "is_installing_pytorch", False),
+                )
+                return
 
             if result.returncode != 0:
                 _schedule_scene_update(
@@ -387,16 +433,47 @@ class SUBTITLE_OT_install_pytorch(Operator):
                     ),
                 )
 
-                runtime_cmd = DependencyManager.get_install_command(
-                    cuda_runtime_packages,
-                    use_uv=use_uv,
+                runtime_plan = build_install_plan(
+                    [
+                        build_install_step(
+                            name="cuda-runtime",
+                            packages=cuda_runtime_packages,
+                            use_uv=use_uv,
+                        )
+                    ]
                 )
 
-                print(f"Running command: {' '.join(runtime_cmd)}")
-                runtime_result = DependencyManager.run_install_command(
-                    runtime_cmd,
-                    check=False,
+                print(f"Running command: {' '.join(runtime_plan.steps[0].command)}")
+                runtime_boundary = execute_with_boundary(
+                    "subtitle.pytorch.cuda_runtime",
+                    lambda: execute_install_plan(runtime_plan),
+                    logger,
+                    context={"version": pytorch_version, "use_uv": use_uv},
+                    fallback_message="CUDA runtime library installation failed.",
                 )
+
+                if not runtime_boundary.ok:
+                    _schedule_scene_update(
+                        scene_name,
+                        lambda props: setattr(
+                            props,
+                            "pytorch_install_status",
+                            f"Error: {runtime_boundary.user_message}",
+                        ),
+                    )
+                    return
+
+                runtime_result = runtime_boundary.value
+                if runtime_result is None:
+                    _schedule_scene_update(
+                        scene_name,
+                        lambda props: setattr(
+                            props,
+                            "pytorch_install_status",
+                            "CUDA runtime installation cancelled.",
+                        ),
+                    )
+                    return
 
                 if runtime_result.returncode != 0:
                     _schedule_scene_update(
