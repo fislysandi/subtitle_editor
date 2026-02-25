@@ -93,3 +93,22 @@ Effort scale:
 - Unit tests for pure helper outputs (input->output only)
 - Existing hardening suite remains green
 - Blender runtime sanity checks for modal operations and strip editing paths
+
+## Execution Status (2026-02-25)
+
+- 1. Extract pure style patch planning: done
+- 2. Split transcription retry and VAD policy: done
+- 3. Remove class-global download callback state: done
+- 4. Dependency install command-plan + boundary executor: done
+- 5. Isolate sequence sync pure transforms: done
+- 6. Replace print/error side-channeling with typed envelopes: done
+- 7. Declarative panel section rendering: done
+- 8. Split `ops_strip_edit.py` into feature modules: done (`ops_strip_edit_helpers.py`, `ops_strip_navigation.py`, `ops_strip_style.py`, `ops_strip_copy_style.py`)
+- 9. Separate pure path resolution from filesystem mutation in file utils: done
+
+## Manual Blender UX Pass (Post-Split)
+
+- Add / update / remove strip workflow: passed
+- Apply style to selected workflow: passed
+- Copy style in MetaStrip workflow (`Subtitle_020.002` source): passed (`FINISHED`, target style match)
+- Addon reload checks after module splits: passed
